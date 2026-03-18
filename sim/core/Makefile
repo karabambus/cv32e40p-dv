@@ -359,3 +359,105 @@ certify: verilate
 
 .PHONY: gen-certify
 gen-certify: gen certify
+
+###############################################################################
+# Questa (vsim) certification flow
+# Useful to cross-check Verilator results, e.g. to rule out UNOPTFLAT-related
+# mismodelling for iterative FPU operations (fdiv, fsqrt).
+#
+# Usage:
+#   make questa-compile [CV_CORE_CONFIG=rv32imcf]   # compile once
+#   make certify-vsim   [CV_CORE_CONFIG=rv32imcf]   # run all ELFs
+#   make gen-certify-vsim [CV_CORE_CONFIG=rv32imcf] # gen + compile + run
+
+VSIM        ?= /home/marin/altera/25.1std/questa_fse/linux_x86_64/vsim
+VLOG        ?= /home/marin/altera/25.1std/questa_fse/linux_x86_64/vlog
+VOPT        ?= /home/marin/altera/25.1std/questa_fse/linux_x86_64/vopt
+
+VSIM_WORK_DIR    = $(SIM_RESULTS)/questa_$(CV_CORE_CONFIG)
+VSIM_LOG_DIR     = $(VSIM_WORK_DIR)/logs
+VSIM_OPT_TOP     = tb_top_opt
+
+VLOG_FLAGS  = -sv -work $(VSIM_WORK_DIR) \
+              +define+FPU_EN=$(CERT_FPU_EN) \
+              -suppress 2583
+VOPT_FLAGS  = -work $(VSIM_WORK_DIR) \
+              +acc -o $(VSIM_OPT_TOP)
+VSIM_MAX_CYCLES ?= 2000000
+VSIM_FLAGS  = -work $(VSIM_WORK_DIR) \
+              -batch -quiet \
+              -sv_seed 0 \
+              +nowarnTSCALE \
+              -suppress 8386 \
+              -suppress 3009 \
+              -do "run -all; quit -f" \
+              +maxcycles=$(VSIM_MAX_CYCLES)
+
+.PHONY: questa-compile
+questa-compile: CV_CORE_pkg
+	@echo "$(BANNER)"
+	@echo "* Compiling CORE TB and CV32E40P with Questa (CV_CORE_CONFIG=$(CV_CORE_CONFIG))"
+	@echo "$(BANNER)"
+	mkdir -p $(VSIM_WORK_DIR)
+	$(VLOG) $(VLOG_FLAGS) -f $(CV_CORE_MANIFEST)
+	$(VLOG) $(VLOG_FLAGS) $(TBSRC_PKG)
+	$(VLOG) $(VLOG_FLAGS) $(TBSRC_VERI)
+	$(VOPT) $(VOPT_FLAGS) \
+		-G FPU_EN=$(CERT_FPU_EN) \
+		tb_top
+
+.PHONY: certify-vsim
+certify-vsim: TEST = certification_$(CV_CORE_CONFIG)
+certify-vsim:
+	@echo "$(BANNER)"
+	@echo "* Running ALL compliance ELFs with Questa (CV_CORE_CONFIG=$(CV_CORE_CONFIG))"
+	@echo "$(BANNER)"
+	@set -e; \
+	mkdir -p "$(VSIM_LOG_DIR)"; \
+	SUMMARY="$(VSIM_LOG_DIR)/certification_summary.txt"; \
+	echo "RESULT  TEST" > "$$SUMMARY"; \
+	echo "------  ----" >> "$$SUMMARY"; \
+	ROOT="$(certification_PROGRAM_PATH)/rv32i"; \
+	ELFS="$$(find -L "$$ROOT" \( -type f -o -type l \) -a \( -iname '*.elf' -o -iname '*.elf32' \) 2>/dev/null | sort)"; \
+	if [ -z "$$ELFS" ]; then \
+	  echo "No .elf files found under $$ROOT"; \
+	  echo "Debug listing (2 levels):"; \
+	  find "$$ROOT" -maxdepth 2 -print || true; \
+	  exit 2; \
+	fi; \
+	PASS=0; FAIL=0; TOTAL=0; \
+	for ELF in $$ELFS; do \
+	  TOTAL=$$((TOTAL+1)); \
+	  REL="$${ELF#$$ROOT/}"; \
+	  BASE="$${ELF%.*}"; \
+	  HEX="$$BASE.hex"; \
+	  LOG="$(VSIM_LOG_DIR)/$${REL%.*}.log"; \
+	  mkdir -p "$$(dirname "$$LOG")"; \
+	  if [ ! -f "$$HEX" ] || [ "$$ELF" -nt "$$HEX" ]; then \
+	    riscv64-unknown-elf-objcopy -O verilog "$$ELF" "$$HEX"; \
+	  fi; \
+	  ENTRY=$$(riscv64-unknown-elf-readelf -h "$$ELF" | awk '/Entry point/{print $$NF}'); \
+	  ENTRY_HEX=$${ENTRY#0x}; \
+	  set +e; \
+	  $(VSIM) $(VSIM_FLAGS) \
+	    $(VSIM_OPT_TOP) \
+	    "+test_program=$$HEX" \
+	    "+boot_addr=$$ENTRY_HEX" \
+	    > "$$LOG" 2>&1; \
+	  RC=$$?; \
+	  set -e; \
+	  if [ $$RC -eq 0 ] && grep -q "ALL TESTS PASSED" "$$LOG"; then \
+	    echo "PASS    $$REL" | tee -a "$$SUMMARY"; \
+	    PASS=$$((PASS+1)); \
+	  else \
+	    echo "FAIL    $$REL" | tee -a "$$SUMMARY"; \
+	    FAIL=$$((FAIL+1)); \
+	  fi; \
+	done; \
+	echo "" | tee -a "$$SUMMARY"; \
+	echo "TOTAL=$$TOTAL PASS=$$PASS FAIL=$$FAIL" | tee -a "$$SUMMARY"; \
+	echo "Summary saved to: $$SUMMARY"; \
+	true
+
+.PHONY: gen-certify-vsim
+gen-certify-vsim: gen questa-compile certify-vsim
