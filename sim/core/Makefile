@@ -406,7 +406,7 @@ questa-compile: CV_CORE_pkg
 	mkdir -p $(VSIM_WORK_DIR)
 	$(VLOG) $(VLOG_FLAGS) -f $(CV_CORE_MANIFEST)
 	$(VLOG) $(VLOG_FLAGS) $(TBSRC_PKG)
-	$(VLOG) $(VLOG_FLAGS) $(TBSRC_VERI)
+	$(VLOG) $(VLOG_FLAGS) $(TBSRC)
 	$(VOPT) $(VOPT_FLAGS) \
 		-G FPU_EN=$(CERT_FPU_EN) \
 		tb_top
