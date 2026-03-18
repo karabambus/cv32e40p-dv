@@ -52,14 +52,6 @@ module riscv_random_interrupt_generator
 );
 
 `ifndef VERILATOR
-class rand_irq_cycles;
-    rand int n;
-endclass : rand_irq_cycles
-
-class rand_irq_id;
-    rand int n;
-endclass : rand_irq_id
-
 logic [31:0] irq_mode_q;
 logic        irq_random;
 logic  [4:0] irq_id_random;
@@ -105,9 +97,8 @@ end
 //Random Process
 initial
 begin
-    automatic rand_irq_cycles wait_cycles = new();
-    automatic rand_irq_id value = new();
-    int rs,i, min_irq_cycles, max_irq_cycles, min_irq_id, max_irq_id;
+    int wait_cycles_n, value_n;
+    int i, min_irq_cycles, max_irq_cycles, min_irq_id, max_irq_id;
     irq_random = 1'b0;
     irq_id_random  = '0;
 
@@ -124,27 +115,17 @@ begin
         min_irq_cycles = irq_min_cycles_i;
         max_irq_cycles = irq_max_cycles_i;
 
-        rs = 0; // "randomize success"
-        rs = value.randomize() with{
-            n >= min_irq_id;
-            n <= max_irq_id;
-        };
-        if (!rs) `uvm_error("RISCV_RANDOM_INTERRUPT_GENERATOR", "Randomization failure on value.randomize()")
+        value_n       = $urandom_range(max_irq_id, min_irq_id);
+        wait_cycles_n = $urandom_range(max_irq_cycles, min_irq_cycles);
 
-        rs = wait_cycles.randomize() with{
-            n >= min_irq_cycles;
-            n <= max_irq_cycles;
-        };
-        if (!rs) `uvm_error("RISCV_RANDOM_INTERRUPT_GENERATOR", "Randomization failure on wait_cycles.randomize()")
-
-        while(wait_cycles.n != 0) begin
+        while(wait_cycles_n != 0) begin
             @(posedge clk_i);
-            wait_cycles.n--;
+            wait_cycles_n--;
         end
 
-        irq_id_random = value.n;
+        irq_id_random = value_n;
         irq_random    = 1'b1;
-        irq_act_id_o  = value.n;
+        irq_act_id_o  = value_n;
         @(posedge clk_i);
         //we don't care about the ack in this mode
         for(i=0; i<max_irq_cycles; i++) begin

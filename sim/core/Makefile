@@ -136,6 +136,7 @@ RTLSRC_VOPT_TB_TOP	:= $(addsuffix _vopt, $(RTLSRC_VLOG_TB_TOP))
 TBSRC_VERI  := $(TBSRC_CORE)/tb_top.sv \
                $(TBSRC_CORE)/tb_riscv/riscv_rvalid_stall.sv \
                $(TBSRC_CORE)/tb_riscv/riscv_gnt_stall.sv \
+               $(TBSRC_CORE)/tb_riscv/riscv_random_interrupt_generator.sv \
                $(TBSRC_CORE)/mm_ram.sv \
                $(TBSRC_CORE)/dp_ram.sv
 SIM_LIBS    := $(CORE_V_VERIF)/lib/sim_libs
