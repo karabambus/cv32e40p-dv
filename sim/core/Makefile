@@ -113,12 +113,14 @@ VERI_LOG_DIR       ?= $(SIM_TEST_PROGRAM_RESULTS)
 # FuseSoC configuration
 FUSESOC             = fusesoc
 FUSESOC_CORE        = openhwgroup:cv32e40p-dv:cv32e40p_sim:0.1
-FUSESOC_BUILD_DIR   = $(CV32E40P_DV)/build
 FUSESOC_TARGET      = $(if $(filter rv32imcf,$(CV_CORE_CONFIG)),sim_fpu,sim)
 FUSESOC_WAVES_SUFFIX = $(if $(filter 1,$(WAVES)),_waves,)
 FUSESOC_FINAL_TARGET = $(FUSESOC_TARGET)$(FUSESOC_WAVES_SUFFIX)
-# FuseSoC output path: build/<vendor>_<core>_<name>_<version>/sim-verilator/Vtb_top
-VERI_EXEC_FUSESOC   = $(FUSESOC_BUILD_DIR)/openhwgroup_cv32e40p-dv_cv32e40p_sim_0.1/sim-verilator/Vtb_top
+# Each target gets its own build root to prevent FPU_EN=0/1 collisions
+# (Verilator incremental build would silently reuse the wrong binary otherwise)
+FUSESOC_BUILD_DIR   = $(CV32E40P_DV)/build/$(FUSESOC_FINAL_TARGET)
+# FuseSoC output path: <build_root>/<vlnv>/<target>-verilator/Vtb_top
+VERI_EXEC_FUSESOC   = $(FUSESOC_BUILD_DIR)/openhwgroup_cv32e40p-dv_cv32e40p_sim_0.1/$(FUSESOC_FINAL_TARGET)-verilator/Vtb_top
 
 # TB source files for the CV32E40P core
 #TBSRC_HOME  := $(CORE_V_VERIF)/$(CV_CORE_LC)/tb
