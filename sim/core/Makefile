@@ -105,7 +105,8 @@ include $(CV32E40P_DV)/mk/Common.mk
 # verilator configuration
 VERILATOR           = verilator
 VERI_FLAGS         +=
-VERI_WAIVERS       += -Wno-COMBDLY -Wno-MULTIDRIVEN -Wno-BLKANDNBLK -Wno-lint --Wno-UNOPTFLAT -Wno-MODDUP -Wno-WIDTHCONCAT -Wno-WIDTHEXPAND -Wno-WIDTHTRUNC
+VERI_WAIVER_FILE    = $(CV32E40P_DV)/sim/core/verilator_waiver.vlt
+VERI_WAIVERS       += -Wno-lint
 VERI_COMPILE_FLAGS += $(VERI_WAIVERS) $(SV_CMP_FLAGS)
 VERI_TRACE         ?=
 VERI_OBJ_DIR       ?= cobj_dir
@@ -203,7 +204,8 @@ verilate: CV_CORE_pkg $(TBSRC_VERI) $(TBSRC_PKG)
 	$(VERILATOR) --binary --cc --sv --exe \
 		$(VERI_TRACE) \
 	        --top-module tb_top \
-		$(TBSRC_VERI) \
+		$(VERI_WAIVER_FILE) \
+		$(TBSRC_PKG) $(TBSRC_VERI) \
 		-f $(CV_CORE_MANIFEST) \
 		--Mdir $(VERI_OBJ_DIR) \
 		-CFLAGS "-std=gnu++14 $(VERI_CFLAGS)" \
