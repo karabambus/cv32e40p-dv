@@ -167,6 +167,11 @@ check:
 	@echo "$(BANNER)"
 	@echo "CV32E40P_DV      = $(CV32E40P_DV)"
 	@echo "CORE_V_VERIF    = $(CORE_V_VERIF)"
+	@echo "CV_CORE_CONFIG   = $(CV_CORE_CONFIG)"
+	@echo "CERT_PROFILE     = $(CERT_PROFILE)"
+	@echo "CERT_EXTENSIONS  = $(CERT_EXTENSIONS)"
+	@echo "CERT_CONFIG_NAME = $(CERT_CONFIG_NAME)"
+	@echo "CERT_RESULTS_DIR = $(CERT_RESULTS_DIR)"
 	@echo "TEST_FLAGS_MAKE = $(TEST_FLAGS_MAKE)"
 	@echo "TEST_FLAGS created by $(YAML2MAKE):"
 	@cat $(TEST_FLAGS_MAKE)
@@ -286,18 +291,32 @@ CV_CORE_CONFIG ?= rv32imc
 
 ifeq ($(CV_CORE_CONFIG),rv32imcf)
   CERT_FPU_EN      = 1
-  CERT_EXTENSIONS  = I,M,C,Zca,Zcf,F,Zicsr,Zifencei
   CERT_CONFIG_NAME = cv32e40p_v1.8.3_rv32imcf
 else
   CERT_FPU_EN      = 0
-  CERT_EXTENSIONS  = I,M,C,Zca,Zicsr,Zifencei
   CERT_CONFIG_NAME = cv32e40p_v1.8.3_rv32imc
+endif
+
+###############################################################################
+# Certification profile: selects the extension set passed to ACT4 for test
+# generation. Per-core capability filtering is done dynamically by ACT4 via
+# the core's UDB YAML. Supported: rvi20. Future: mc100, rva20, ...
+CERT_PROFILE ?= rvi20
+
+ifeq ($(CERT_PROFILE),rvi20)
+  # rvi20 unprivileged extension set. C has no ACT4 dir; maps to Zca/Zcb/Zcf/Zcd.
+  CERT_EXTENSIONS = I,M,F,D,Zaamo,Zalrsc,Zca,Zcb,Zcf,Zcd,Zicntr,Zifencei,Zihpm,Zicsr
+else
+  $(error Unknown CERT_PROFILE=$(CERT_PROFILE). Supported: rvi20)
 endif
 
 ###############################################################################
 # certification test-program directories
 certification_PROGRAM_PATH    = $(ACT4_PKG)/work/$(CERT_CONFIG_NAME)/elfs
 certification_PROGRAM_RELPATH = ../../vendor_lib/riscv-arch-test/act4/work/$(CERT_CONFIG_NAME)/elfs
+# Results directory encodes both ISA config and profile to avoid collisions
+# when multiple profiles are run (e.g. rvi20 vs mc100 with the same CV_CORE_CONFIG).
+CERT_RESULTS_DIR = certification_$(CV_CORE_CONFIG)_$(CERT_PROFILE)
 
 ###############################################################################
 # certification test target (run ALL ELFs under compliance/rv32, quiet + summary)
@@ -312,7 +331,7 @@ gen: $(ACT4_PKG)
 	@echo "* Tests generated in: $(certification_PROGRAM_PATH)"
 
 .PHONY: certify
-certify: TEST = certification_$(CV_CORE_CONFIG)
+certify: TEST = $(CERT_RESULTS_DIR)
 certify: verilate
 	@echo "$(BANNER)"
 	@echo "* Running ALL compliance ELFs with Verilator"
@@ -381,7 +400,7 @@ VSIM        ?= /home/marin/altera/25.1std/questa_fse/linux_x86_64/vsim
 VLOG        ?= /home/marin/altera/25.1std/questa_fse/linux_x86_64/vlog
 VOPT        ?= /home/marin/altera/25.1std/questa_fse/linux_x86_64/vopt
 
-VSIM_WORK_DIR    = $(SIM_RESULTS)/questa_$(CV_CORE_CONFIG)
+VSIM_WORK_DIR    = $(SIM_RESULTS)/questa_$(CV_CORE_CONFIG)_$(CERT_PROFILE)
 VSIM_LOG_DIR     = $(VSIM_WORK_DIR)/logs
 VSIM_OPT_TOP     = tb_top_opt
 
@@ -414,7 +433,7 @@ questa-compile: CV_CORE_pkg
 		tb_top
 
 .PHONY: certify-vsim
-certify-vsim: TEST = certification_$(CV_CORE_CONFIG)
+certify-vsim: TEST = $(CERT_RESULTS_DIR)
 certify-vsim:
 	@echo "$(BANNER)"
 	@echo "* Running ALL compliance ELFs with Questa (CV_CORE_CONFIG=$(CV_CORE_CONFIG))"
