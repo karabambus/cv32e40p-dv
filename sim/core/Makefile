@@ -56,7 +56,7 @@ CV_CORE       ?= cv32e40p
 CV_CORE_LC     = $(shell echo $(CV_CORE) | tr A-Z a-z)
 CV_CORE_UC     = $(shell echo $(CV_CORE) | tr a-z A-Z)
 
-#TODO(Ateeb): Temporary, remove next 4 lines after debug
+# Default toolchain — override via environment or command line (see README quickstart).
 CV_SW_TOOLCHAIN      ?= /opt/riscv
 CV_SW_PREFIX         ?= "riscv64-unknown-elf-"
 CV_SW_MARCH			 ?= rv32imc_zicsr_zifencei
@@ -64,14 +64,16 @@ CV_SW_CC		 	 ?= gcc
 
 SIMULATOR     ?= $(CV_SIMULATOR)
 ifneq (${SIMULATOR}, verilator)
-  # TODO: should this testbench support other simulators?
+  # The SIMULATOR variable controls the Verilator flow (sanity/test/certify targets).
+  # Questa is supported via separate questa-compile / certify-vsim targets that
+  # bypass this variable entirely — no multi-simulator dispatch is needed here.
   $(warning setting SIMULATOR to verilator (for now))
   SIMULATOR = verilator
 endif
 
-# Test-Program directores.
-# Relative path is used for Verilator which cannot seem to handle loooong pathnames.
-# TODO: find out if that is still true and if not, switch to abs paths.
+# Test-Program directories.
+# Relative paths are used for Verilator; absolute paths cause issues with
+# very long pathnames on some host configurations.
 TEST_PROGRAM_PATH    = $(CV32E40P_DV)/tests/programs/custom
 TEST_PROGRAM_RELPATH = ../../tests/programs/custom
 # 'Special' test-programs (see $(CV32E40P_DV)/mk/Common.mk)
