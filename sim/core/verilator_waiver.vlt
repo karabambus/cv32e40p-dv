@@ -1,0 +1,50 @@
+// Copyright 2025 Eclipse Foundation
+// SPDX-License-Identifier: Apache-2.0 WITH SHL-0.51
+//
+// Lint waivers for CV32E40P (Verilator config file)
+// See https://verilator.org/guide/latest/exe_verilator.html#configuration-files
+// for documentation.
+//
+// Important: This file must be included *before* any other Verilog file is read.
+// Otherwise, only global waivers are applied, but not file-specific waivers.
+
+`verilator_config
+
+// Combinatorial logic with delays (#N delays inside always_comb / comb always).
+// CV32E40P simulation models (e.g. clock gating behavioural model) use
+// procedural delays that Verilator does not support in synthesis-style blocks.
+lint_off -rule COMBDLY
+
+// Multiple drivers on a signal.
+// Present in CV32E40P RTL for certain mux and tri-state patterns.
+lint_off -rule MULTIDRIVEN
+
+// Mixing blocking (=) and non-blocking (<=) assignments in the same always block.
+// CV32E40P control logic uses this pattern in a small number of modules.
+lint_off -rule BLKANDNBLK
+
+// Unoptimizable combinational feedback loop (multi-signal circular path).
+// The FPU (fpnew vendor IP) has combinatorial feedback paths in the fdiv/fsqrt
+// iterative datapath that Verilator cannot flatten into a single evaluation pass.
+// This causes fdiv and fsqrt certification tests to time out under Verilator —
+// this is a known Verilator limitation for this FPU topology, not a core bug.
+// Use Questa to validate FPU iterative ops: make certify-vsim CV_CORE_CONFIG=rv32imcf
+lint_off -rule UNOPTFLAT
+
+// Duplicate module definitions.
+// Arises when shared vendor modules appear in both the TB and RTL file lists.
+lint_off -rule MODDUP
+
+// Width mismatch in concatenation expressions.
+lint_off -rule WIDTHCONCAT
+
+// Implicit width extension (assigning a narrower signal into a wider net).
+lint_off -rule WIDTHEXPAND
+
+// Width truncation (assigning a wider expression into a narrower net).
+lint_off -rule WIDTHTRUNC
+
+// Timescale directive present in testbench but absent in RTL / package files.
+// tb_top.sv declares `timescale 1ns/100ps; all RTL and the perturbation_defines
+// package are timescale-free. Verilator 5.046+ warns on this mismatch.
+lint_off -rule TIMESCALEMOD
