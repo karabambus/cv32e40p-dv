@@ -56,7 +56,7 @@ CV_CORE       ?= cv32e40p
 CV_CORE_LC     = $(shell echo $(CV_CORE) | tr A-Z a-z)
 CV_CORE_UC     = $(shell echo $(CV_CORE) | tr a-z A-Z)
 
-#TODO(Ateeb): Temporary, remove next 4 lines after debug
+# Default toolchain — override via environment or command line (see README quickstart).
 CV_SW_TOOLCHAIN      ?= /opt/riscv
 CV_SW_PREFIX         ?= "riscv64-unknown-elf-"
 CV_SW_MARCH			 ?= rv32imc_zicsr_zifencei
@@ -64,14 +64,16 @@ CV_SW_CC		 	 ?= gcc
 
 SIMULATOR     ?= $(CV_SIMULATOR)
 ifneq (${SIMULATOR}, verilator)
-  # TODO: should this testbench support other simulators?
+  # The SIMULATOR variable controls the Verilator flow (sanity/test/certify targets).
+  # Questa is supported via separate questa-compile / certify-vsim targets that
+  # bypass this variable entirely — no multi-simulator dispatch is needed here.
   $(warning setting SIMULATOR to verilator (for now))
   SIMULATOR = verilator
 endif
 
-# Test-Program directores.
-# Relative path is used for Verilator which cannot seem to handle loooong pathnames.
-# TODO: find out if that is still true and if not, switch to abs paths.
+# Test-Program directories.
+# Relative paths are used for Verilator; absolute paths cause issues with
+# very long pathnames on some host configurations.
 TEST_PROGRAM_PATH    = $(CV32E40P_DV)/tests/programs/custom
 TEST_PROGRAM_RELPATH = ../../tests/programs/custom
 # 'Special' test-programs (see $(CV32E40P_DV)/mk/Common.mk)
@@ -105,13 +107,22 @@ include $(CV32E40P_DV)/mk/Common.mk
 # verilator configuration
 VERILATOR           = verilator
 VERI_FLAGS         +=
-VERI_WAIVERS       += -Wno-COMBDLY -Wno-MULTIDRIVEN -Wno-BLKANDNBLK -Wno-lint --Wno-UNOPTFLAT -Wno-MODDUP -Wno-WIDTHCONCAT -Wno-WIDTHEXPAND -Wno-WIDTHTRUNC
-VERI_COMPILE_FLAGS += $(VERI_WAIVERS) $(SV_CMP_FLAGS)
 VERI_TRACE         ?=
 VERI_OBJ_DIR       ?= cobj_dir
 #VERI_LOG_DIR       ?= cobj_dir/logs
 VERI_LOG_DIR       ?= $(SIM_TEST_PROGRAM_RESULTS)
-VERI_CFLAGS        += -O2
+
+# FuseSoC configuration
+FUSESOC             = fusesoc
+FUSESOC_CORE        = openhwgroup:cv32e40p-dv:cv32e40p_sim:0.1
+FUSESOC_TARGET      = $(if $(filter rv32imcf,$(CV_CORE_CONFIG)),sim_fpu,sim)
+FUSESOC_WAVES_SUFFIX = $(if $(filter 1,$(WAVES)),_waves,)
+FUSESOC_FINAL_TARGET = $(FUSESOC_TARGET)$(FUSESOC_WAVES_SUFFIX)
+# Each target gets its own build root to prevent FPU_EN=0/1 collisions
+# (Verilator incremental build would silently reuse the wrong binary otherwise)
+FUSESOC_BUILD_DIR   = $(CV32E40P_DV)/build/$(FUSESOC_FINAL_TARGET)
+# FuseSoC output path: <build_root>/<vlnv>/<target>-verilator/Vtb_top
+VERI_EXEC_FUSESOC   = $(FUSESOC_BUILD_DIR)/openhwgroup_cv32e40p-dv_cv32e40p_sim_0.1/$(FUSESOC_FINAL_TARGET)-verilator/Vtb_top
 
 # TB source files for the CV32E40P core
 #TBSRC_HOME  := $(CORE_V_VERIF)/$(CV_CORE_LC)/tb
@@ -156,6 +167,11 @@ check:
 	@echo "$(BANNER)"
 	@echo "CV32E40P_DV      = $(CV32E40P_DV)"
 	@echo "CORE_V_VERIF    = $(CORE_V_VERIF)"
+	@echo "CV_CORE_CONFIG   = $(CV_CORE_CONFIG)"
+	@echo "CERT_PROFILE     = $(CERT_PROFILE)"
+	@echo "CERT_EXTENSIONS  = $(CERT_EXTENSIONS)"
+	@echo "CERT_CONFIG_NAME = $(CERT_CONFIG_NAME)"
+	@echo "CERT_RESULTS_DIR = $(CERT_RESULTS_DIR)"
 	@echo "TEST_FLAGS_MAKE = $(TEST_FLAGS_MAKE)"
 	@echo "TEST_FLAGS created by $(YAML2MAKE):"
 	@cat $(TEST_FLAGS_MAKE)
@@ -196,22 +212,17 @@ ifneq (${WAVES}, 0)
   VERI_WAVE_CMD   = +wave_file=$(SIM_RUN_RESULTS)/$(WAVE_FILE)
 endif
 
-verilate: CV_CORE_pkg $(TBSRC_VERI) $(TBSRC_PKG)
+verilate: CV_CORE_pkg
 	@echo "$(BANNER)"
-	@echo "* Compiling CORE TB and CV32E40P with Verilator"
+	@echo "* Compiling CORE TB and CV32E40P with Verilator via FuseSoC (target=$(FUSESOC_FINAL_TARGET))"
 	@echo "$(BANNER)"
-	$(VERILATOR) --binary --cc --sv --exe \
-		$(VERI_TRACE) \
-	        --top-module tb_top \
-		$(TBSRC_VERI) \
-		-f $(CV_CORE_MANIFEST) \
-		--Mdir $(VERI_OBJ_DIR) \
-		-CFLAGS "-std=gnu++14 $(VERI_CFLAGS)" \
-		$(VERI_COMPILE_FLAGS) \
-		-GFPU_EN=$(CERT_FPU_EN)
+	$(FUSESOC) --cores-root=$(CV32E40P_DV)/sim/core \
+	           run --no-export --target=$(FUSESOC_FINAL_TARGET) \
+	           --build-root=$(FUSESOC_BUILD_DIR) \
+	           --setup --build $(FUSESOC_CORE)
 	mkdir -p $(SIM_RESULTS)
 	mkdir -p $(SIM_TEST_RESULTS)
-	mv $(VERI_OBJ_DIR)/Vtb_top $(SIM_TEST_RESULTS)/verilator_executable
+	cp $(VERI_EXEC_FUSESOC) $(SIM_TEST_RESULTS)/verilator_executable
 
 test: verilate $(TEST_PROGRAM_PATH)/$(TEST)/$(TEST).hex
 	@echo "$(BANNER)"
@@ -229,6 +240,7 @@ test: verilate $(TEST_PROGRAM_PATH)/$(TEST)/$(TEST).hex
 verilator-clean:
 	if [ -d $(SIM_RESULTS) ]; then rm -r $(SIM_RESULTS); fi
 	if [ -d $(VERI_OBJ_DIR) ]; then rm -r $(VERI_OBJ_DIR); fi
+	if [ -d $(FUSESOC_BUILD_DIR) ]; then rm -r $(FUSESOC_BUILD_DIR); fi
 	if [ -e memory_dump.bin ]; then rm memory_dump.bin; fi
 	if [ -e cv32e40p_tb.vcd ]; then rm cv32e40p_tb.vcd; fi
 
@@ -279,18 +291,36 @@ CV_CORE_CONFIG ?= rv32imc
 
 ifeq ($(CV_CORE_CONFIG),rv32imcf)
   CERT_FPU_EN      = 1
-  CERT_EXTENSIONS  = I,M,C,Zca,Zcf,F,Zicsr,Zifencei
   CERT_CONFIG_NAME = cv32e40p_v1.8.3_rv32imcf
 else
   CERT_FPU_EN      = 0
-  CERT_EXTENSIONS  = I,M,C,Zca,Zicsr,Zifencei
   CERT_CONFIG_NAME = cv32e40p_v1.8.3_rv32imc
+endif
+
+###############################################################################
+# Certification profile: selects the extension set passed to ACT4 for test
+# generation. Per-core capability filtering is done dynamically by ACT4 via
+# the core's UDB YAML. Supported: rvi20. Future: mc100, rva20, ...
+CERT_PROFILE ?= rvi20
+
+ifeq ($(CERT_PROFILE),rvi20)
+  # rvi20 unprivileged extension set. C has no ACT4 dir; maps to Zca/Zcb/Zcf/Zcd.
+  CERT_EXTENSIONS = I,M,F,D,Zaamo,Zalrsc,Zca,Zcb,Zcf,Zcd,Zicntr,Zifencei,Zihpm,Zicsr
+else
+  $(error Unknown CERT_PROFILE=$(CERT_PROFILE). Supported: rvi20)
 endif
 
 ###############################################################################
 # certification test-program directories
 certification_PROGRAM_PATH    = $(ACT4_PKG)/work/$(CERT_CONFIG_NAME)/elfs
 certification_PROGRAM_RELPATH = ../../vendor_lib/riscv-arch-test/act4/work/$(CERT_CONFIG_NAME)/elfs
+# Results directory encodes both ISA config and profile to avoid collisions
+# when multiple profiles are run (e.g. rvi20 vs mc100 with the same CV_CORE_CONFIG).
+CERT_RESULTS_DIR = certification_$(CV_CORE_CONFIG)_$(CERT_PROFILE)
+
+# Optional extension filter: narrows certify/certify-vsim to a single extension.
+# Usage: make certify FILTER=Zicntr
+FILTER ?=
 
 ###############################################################################
 # certification test target (run ALL ELFs under compliance/rv32, quiet + summary)
@@ -305,7 +335,7 @@ gen: $(ACT4_PKG)
 	@echo "* Tests generated in: $(certification_PROGRAM_PATH)"
 
 .PHONY: certify
-certify: TEST = certification_$(CV_CORE_CONFIG)
+certify: TEST = $(CERT_RESULTS_DIR)
 certify: verilate
 	@echo "$(BANNER)"
 	@echo "* Running ALL compliance ELFs with Verilator"
@@ -315,7 +345,7 @@ certify: verilate
 	SUMMARY="$(VERI_LOG_DIR)/certification_summary.txt"; \
 	echo "RESULT  TEST" > "$$SUMMARY"; \
 	echo "------  ----" >> "$$SUMMARY"; \
-	ROOT="$(certification_PROGRAM_PATH)/rv32i"; \
+	ROOT="$(certification_PROGRAM_PATH)/rv32i$(if $(FILTER),/$(FILTER),)"; \
 	ELFS="$$(find -L "$$ROOT" \( -type f -o -type l \) -a \( -iname '*.elf' -o -iname '*.elf32' \) 2>/dev/null | sort)"; \
 	if [ -z "$$ELFS" ]; then \
 	  echo "No .elf files found under $$ROOT"; \
@@ -374,7 +404,7 @@ VSIM        ?= /home/marin/altera/25.1std/questa_fse/linux_x86_64/vsim
 VLOG        ?= /home/marin/altera/25.1std/questa_fse/linux_x86_64/vlog
 VOPT        ?= /home/marin/altera/25.1std/questa_fse/linux_x86_64/vopt
 
-VSIM_WORK_DIR    = $(SIM_RESULTS)/questa_$(CV_CORE_CONFIG)
+VSIM_WORK_DIR    = $(SIM_RESULTS)/questa_$(CV_CORE_CONFIG)_$(CERT_PROFILE)
 VSIM_LOG_DIR     = $(VSIM_WORK_DIR)/logs
 VSIM_OPT_TOP     = tb_top_opt
 
@@ -401,13 +431,13 @@ questa-compile: CV_CORE_pkg
 	mkdir -p $(VSIM_WORK_DIR)
 	$(VLOG) $(VLOG_FLAGS) -f $(CV_CORE_MANIFEST)
 	$(VLOG) $(VLOG_FLAGS) $(TBSRC_PKG)
-	$(VLOG) $(VLOG_FLAGS) $(TBSRC_VERI)
+	$(VLOG) $(VLOG_FLAGS) $(TBSRC)
 	$(VOPT) $(VOPT_FLAGS) \
 		-G FPU_EN=$(CERT_FPU_EN) \
 		tb_top
 
 .PHONY: certify-vsim
-certify-vsim: TEST = certification_$(CV_CORE_CONFIG)
+certify-vsim: TEST = $(CERT_RESULTS_DIR)
 certify-vsim:
 	@echo "$(BANNER)"
 	@echo "* Running ALL compliance ELFs with Questa (CV_CORE_CONFIG=$(CV_CORE_CONFIG))"
@@ -417,7 +447,7 @@ certify-vsim:
 	SUMMARY="$(VSIM_LOG_DIR)/certification_summary.txt"; \
 	echo "RESULT  TEST" > "$$SUMMARY"; \
 	echo "------  ----" >> "$$SUMMARY"; \
-	ROOT="$(certification_PROGRAM_PATH)/rv32i"; \
+	ROOT="$(certification_PROGRAM_PATH)/rv32i$(if $(FILTER),/$(FILTER),)"; \
 	ELFS="$$(find -L "$$ROOT" \( -type f -o -type l \) -a \( -iname '*.elf' -o -iname '*.elf32' \) 2>/dev/null | sort)"; \
 	if [ -z "$$ELFS" ]; then \
 	  echo "No .elf files found under $$ROOT"; \
