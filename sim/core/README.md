@@ -50,6 +50,22 @@ CV32E40P supports two certification configurations controlled by `CV_CORE_CONFIG
 | `rv32imc` (default) | I, M, C, Zca, Zicsr, Zifencei | off | `cv32e40p_v1.8.3_rv32imc` |
 | `rv32imcf` | I, M, C, Zca, Zcf, F, Zicsr, Zifencei | on | `cv32e40p_v1.8.3_rv32imcf` |
 
+### Certification Profile
+
+The `CERT_PROFILE` variable selects which extension set is passed to ACT4 for test generation.
+ACT4 then dynamically filters tests against the core's UDB YAML — only extensions actually
+implemented in the DUT are tested.
+
+```
+make gen-certify [CERT_PROFILE=rvi20]   # default: rvi20
+```
+
+Currently supported profiles:
+
+| `CERT_PROFILE` | Description |
+|---|---|
+| `rvi20` (default) | RVI20U32 unprivileged profile |
+
 ### Prerequisites
 - **RISC-V GCC toolchain** (`riscv64-unknown-elf-gcc`): upstream GCC with RISC-V multi-lib support.
   See `../TOOLCHAIN.md`. Set `CV_SW_TOOLCHAIN` and `CV_SW_PREFIX` in your environment, e.g.:
@@ -78,11 +94,22 @@ make gen       # clone ACT4 (if needed) + generate ELFs via Sail reference model
 make certify   # compile with Verilator and run all ELFs through the DUT
 ```
 
-Results are written to:
-`simulation_results/certification_<CV_CORE_CONFIG>/<RUN_INDEX>/test_program/certification_summary.txt`
+To run only a specific extension:
+```
+make certify FILTER=Zicntr [CV_CORE_CONFIG=rv32imcf]
+```
 
-For example, for the default rv32imc config:
-`simulation_results/certification_rv32imc/0/test_program/certification_summary.txt`
+To generate waveforms (FST) for debugging:
+```
+make certify WAVES=1 FILTER=Zicntr
+gtkwave cv32e40p.fst
+```
+
+Results are written to:
+`simulation_results/certification_<CV_CORE_CONFIG>_<CERT_PROFILE>/logs/certification_summary.txt`
+
+For example, for the default rv32imc + rvi20:
+`simulation_results/certification_rv32imc_rvi20/logs/certification_summary.txt`
 
 Running ACT4 Certification Tests with Questa (vsim)
 ----------------------------------------------------
@@ -112,11 +139,16 @@ Or generate tests, compile, and run in one step:
 make gen-certify-vsim [CV_CORE_CONFIG=rv32imcf]
 ```
 
-Results are written to:
-`simulation_results/questa_<CV_CORE_CONFIG>/logs/certification_summary.txt`
+To run only a specific extension:
+```
+make certify-vsim FILTER=Zicntr [CV_CORE_CONFIG=rv32imcf]
+```
 
-For example, for rv32imcf:
-`simulation_results/questa_rv32imcf/logs/certification_summary.txt`
+Results are written to:
+`simulation_results/questa_<CV_CORE_CONFIG>_<CERT_PROFILE>/logs/certification_summary.txt`
+
+For example, for rv32imcf + rvi20:
+`simulation_results/questa_rv32imcf_rvi20/logs/certification_summary.txt`
 
 The maximum cycle limit per test defaults to 2,000,000 and can be overridden:
 ```
@@ -127,11 +159,19 @@ make certify-vsim CV_CORE_CONFIG=rv32imcf VSIM_MAX_CYCLES=5000000
 
 | Test | Verilator | Questa | Root cause |
 |---|---|---|---|
-| F-fdiv.s-00 | FAIL | PASS | UNOPTFLAT: iterative combinatorial FPU divide path |
-| F-fdiv.s-01 | FAIL | PASS | UNOPTFLAT: iterative combinatorial FPU divide path |
-| F-fsqrt.s-00 | FAIL | PASS | UNOPTFLAT: iterative combinatorial FPU sqrt path |
+| F-fdiv.s-00 | FAIL | PASS | FPNEw iterative divide path mismodelled by Verilator |
+| F-fdiv.s-01 | FAIL | PASS | FPNEw iterative divide path mismodelled by Verilator |
+| F-fsqrt.s-00 | FAIL | PASS | FPNEw iterative sqrt path mismodelled by Verilator |
+| Zicntr-csrrc-00 | PASS (false) | PASS | See note below |
+| Zicntr-csrrs-00 | PASS (false) | PASS | See note below |
 
-These are Verilator simulation artefacts, not RTL bugs. Verilator converts the
-combinatorial feedback loops in the FPNEw FPU (used by CV32E40P) into clocked
-logic when `--Wno-UNOPTFLAT` is set, which produces incorrect intermediate values
-for multi-cycle iterative operations. Questa models the combinatorial paths correctly.
+**FPU failures (F-fdiv, F-fsqrt):** Verilator mismodels the FPNEw FPU iterative datapath
+due to combinatorial feedback loops in the divide/sqrt units. These are Verilator simulation
+artefacts, not RTL bugs. Questa is authoritative for FPU tests.
+
+**Zicntr false positive:** CV32E40P resets `mcountinhibit` to `0x1` (counters inhibited) but
+Verilator incorrectly simulates it as `0` (counters enabled) due to a Verilator code generation
+bug with packed arrays driven by mixed `assign`/`always_ff` in generate for-loops. This causes
+Zicntr tests to falsely pass in Verilator when `RVMODEL_BOOT` does not clear `mcountinhibit`.
+The CTP fix (`RVMODEL_BOOT` clears `mcountinhibit`) makes both simulators agree. See
+`config/cores/cv32e40p/*/rvmodel_macros.h`.
