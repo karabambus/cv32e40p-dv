@@ -279,33 +279,45 @@ CV_CORE_CONFIG ?= rv32imc
 
 ifeq ($(CV_CORE_CONFIG),rv32imcf)
   CERT_FPU_EN      = 1
-  CERT_EXTENSIONS  = I,M,C,Zca,Zcf,F,Zicsr,Zifencei
   CERT_CONFIG_NAME = cv32e40p_v1.8.3_rv32imcf
 else
   CERT_FPU_EN      = 0
-  CERT_EXTENSIONS  = I,M,C,Zca,Zicsr,Zifencei
   CERT_CONFIG_NAME = cv32e40p_v1.8.3_rv32imc
+endif
+
+###############################################################################
+# Certification profile: scopes which extension testplans ACT4 processes.
+# ACT4's select_tests() further filters by the core's implemented_extensions.
+# Without CERT_PROFILE, ACT4 runs the full config (no EXTENSIONS= filter).
+# Supported profiles: rvi20
+CERT_PROFILE ?=
+
+ifeq ($(CERT_PROFILE),rvi20)
+  # RVI20U32 profile — mandatory: I; optional: A,C,D,F,M,Zca,Zcd,Zcf,Zicntr,Zicsr,Zifencei,Zihpm
+  _CERT_EXTS = I,M,A,C,D,F,Zca,Zcd,Zcf,Zicntr,Zicsr,Zifencei,Zihpm
+else ifneq ($(CERT_PROFILE),)
+  $(error Unknown CERT_PROFILE=$(CERT_PROFILE). Supported: rvi20)
 endif
 
 ###############################################################################
 # certification test-program directories
 certification_PROGRAM_PATH    = $(ACT4_PKG)/work/$(CERT_CONFIG_NAME)/elfs
 certification_PROGRAM_RELPATH = ../../vendor_lib/riscv-arch-test/act4/work/$(CERT_CONFIG_NAME)/elfs
+CERT_RESULTS_DIR = certification_$(CV_CORE_CONFIG)$(if $(CERT_PROFILE),_$(CERT_PROFILE))
 
 ###############################################################################
 # certification test target (run ALL ELFs under compliance/rv32, quiet + summary)
 .PHONY: gen
 gen: $(ACT4_PKG)
-	@echo "* Cleaning ACT4.0 directory..."
+	@command -v uv >/dev/null 2>&1 || { echo "Error: 'uv' not found. Install from https://docs.astral.sh/uv/getting-started/installation/"; exit 1; }
 	@$(MAKE) -C $(ACT4_PKG) clean
-	@echo "* Generating ACT4.0 tests for $(CERT_CONFIG_NAME)..."
+	@echo "* Running ACT4.0 gen$(if $(CERT_PROFILE), with profile '$(CERT_PROFILE)' extensions: $(_CERT_EXTS))"
 	@$(MAKE) -C $(ACT4_PKG) \
-		EXTENSIONS=$(CERT_EXTENSIONS) \
-		CONFIG_FILES=config/cores/cv32e40p/$(CERT_CONFIG_NAME)/test_config.yaml
-	@echo "* Tests generated in: $(certification_PROGRAM_PATH)"
+	    $(if $(_CERT_EXTS),EXTENSIONS=$(_CERT_EXTS)) \
+	    CONFIG_FILES=config/cores/cv32e40p/$(CERT_CONFIG_NAME)/test_config.yaml
 
 .PHONY: certify
-certify: TEST = certification_$(CV_CORE_CONFIG)
+certify: TEST = $(CERT_RESULTS_DIR)
 certify: verilate
 	@echo "$(BANNER)"
 	@echo "* Running ALL compliance ELFs with Verilator"
