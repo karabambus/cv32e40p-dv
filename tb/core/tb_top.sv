@@ -100,7 +100,7 @@ module tb_top
 
     initial begin: clock_gen
         core_clk = 1'b1;
-	// FIXME: using a forever loop here hangs Verilator
+        // FIXME: using a forever loop here hangs Verilator
         repeat(10_000_000) begin
             #CLK_PHASE_HI core_clk = 1'b0;
             #CLK_PHASE_LO core_clk = 1'b1;
@@ -111,8 +111,9 @@ module tb_top
     // timing format, reset generation and parameter check
     initial begin
         $timeformat(-9, 0, "ns", 9);
-        core_rst_n   = 1'b0; // assert reset
+        core_rst_n   = 1'b1; // deassert reset at t=0
 
+        @(negedge core_clk) core_rst_n = 1'b0; // assert reset
         // hold in reset for a few cycles
         repeat (RESET_ASSERT_CYCLES) @(posedge core_clk);
         // start running
