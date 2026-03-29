@@ -295,9 +295,11 @@ certification_PROGRAM_RELPATH = ../../vendor_lib/riscv-arch-test/act4/work/$(CER
 .PHONY: gen
 gen: $(ACT4_PKG)
 	@command -v uv >/dev/null 2>&1 || { echo "Error: 'uv' not found. Install from https://docs.astral.sh/uv/getting-started/installation/"; exit 1; }
+	@echo "* Cleaning ACT4.0 directory..."
 	@$(MAKE) -C $(ACT4_PKG) clean
-	@echo "* Generating ACT4.0 tests for $(CERT_CONFIG_NAME)..."
+	@echo "* Generating ACT4.0 tests..."
 	@$(MAKE) -C $(ACT4_PKG) \
+		EXTENSIONS=I,M,C,Zca,Zicsr,Zifencei \
 		CONFIG_FILES=config/cores/cv32e40p/$(CERT_CONFIG_NAME)/test_config.yaml
 	@echo "* Tests generated in: $(certification_PROGRAM_PATH)"
 
