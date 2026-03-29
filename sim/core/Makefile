@@ -313,8 +313,8 @@ gen: $(ACT4_PKG)
 	@$(MAKE) -C $(ACT4_PKG) clean
 	@echo "* Running ACT4.0 gen$(if $(CERT_PROFILE), with profile '$(CERT_PROFILE)' extensions: $(_CERT_EXTS))"
 	@$(MAKE) -C $(ACT4_PKG) \
-	    $(if $(_CERT_EXTS),EXTENSIONS=$(_CERT_EXTS)) \
-	    CONFIG_FILES=config/cores/cv32e40p/$(CERT_CONFIG_NAME)/test_config.yaml
+		CONFIG_FILES=config/cores/cv32e40p/$(CERT_CONFIG_NAME)/test_config.yaml
+	@echo "* Tests generated in: $(certification_PROGRAM_PATH)"
 
 .PHONY: certify
 certify: TEST = $(CERT_RESULTS_DIR)
@@ -380,7 +380,9 @@ gen-certify: gen certify
 # Usage:
 #   make questa-compile [CV_CORE_CONFIG=rv32imcf]   # compile once
 #   make certify-vsim   [CV_CORE_CONFIG=rv32imcf]   # run all ELFs
+#   make certify-vsim FILTER=I                       # run only I-extension ELFs
 #   make gen-certify-vsim [CV_CORE_CONFIG=rv32imcf] # gen + compile + run
+#   make questa-clean   [CV_CORE_CONFIG=rv32imcf]   # wipe work library
 
 VSIM        ?= /home/marin/altera/25.1std/questa_fse/linux_x86_64/vsim
 VLOG        ?= /home/marin/altera/25.1std/questa_fse/linux_x86_64/vlog
@@ -390,8 +392,14 @@ VSIM_WORK_DIR    = $(SIM_RESULTS)/questa_$(CV_CORE_CONFIG)
 VSIM_LOG_DIR     = $(VSIM_WORK_DIR)/logs
 VSIM_OPT_TOP     = tb_top_opt
 
+# NOTE: with a full Questa license, remove +define+VERILATOR below and add a
+# separate vlog step for tb_riscv/riscv_random_interrupt_generator.sv (after
+# TBSRC_PKG, before TBSRC_VERI) — mm_ram.sv instantiates it under `ifndef VERILATOR.
+# With Questa FSE (Altera Starter), keep +define+VERILATOR: FSE lacks the
+# svverification license required for randcase/UVM stall features in mm_ram.sv.
 VLOG_FLAGS  = -sv -work $(VSIM_WORK_DIR) \
               +define+FPU_EN=$(CERT_FPU_EN) \
+              +define+VERILATOR \
               -suppress 2583
 VOPT_FLAGS  = -work $(VSIM_WORK_DIR) \
               +acc -o $(VSIM_OPT_TOP)
@@ -421,6 +429,7 @@ questa-compile: CV_CORE_pkg
 .PHONY: certify-vsim
 certify-vsim: TEST = certification_$(CV_CORE_CONFIG)
 certify-vsim:
+	@test -d "$(VSIM_WORK_DIR)/$(VSIM_OPT_TOP)" || { echo "Error: optimized design '$(VSIM_OPT_TOP)' not found. Run 'make questa-compile' first."; exit 1; }
 	@echo "$(BANNER)"
 	@echo "* Running ALL compliance ELFs with Questa (CV_CORE_CONFIG=$(CV_CORE_CONFIG))"
 	@echo "$(BANNER)"
@@ -429,7 +438,7 @@ certify-vsim:
 	SUMMARY="$(VSIM_LOG_DIR)/certification_summary.txt"; \
 	echo "RESULT  TEST" > "$$SUMMARY"; \
 	echo "------  ----" >> "$$SUMMARY"; \
-	ROOT="$(certification_PROGRAM_PATH)/rv32i"; \
+	ROOT="$(certification_PROGRAM_PATH)/rv32i$(if $(FILTER),/$(FILTER),)"; \
 	ELFS="$$(find -L "$$ROOT" \( -type f -o -type l \) -a \( -iname '*.elf' -o -iname '*.elf32' \) 2>/dev/null | sort)"; \
 	if [ -z "$$ELFS" ]; then \
 	  echo "No .elf files found under $$ROOT"; \
@@ -438,7 +447,7 @@ certify-vsim:
 	  exit 2; \
 	fi; \
 	PASS=0; FAIL=0; TOTAL=0; \
-	for ELF in $$ELFS; do \
+	while IFS= read -r ELF; do \
 	  TOTAL=$$((TOTAL+1)); \
 	  REL="$${ELF#$$ROOT/}"; \
 	  BASE="$${ELF%.*}"; \
@@ -465,11 +474,15 @@ certify-vsim:
 	    echo "FAIL    $$REL" | tee -a "$$SUMMARY"; \
 	    FAIL=$$((FAIL+1)); \
 	  fi; \
-	done; \
+	done <<< "$$ELFS"; \
 	echo "" | tee -a "$$SUMMARY"; \
 	echo "TOTAL=$$TOTAL PASS=$$PASS FAIL=$$FAIL" | tee -a "$$SUMMARY"; \
 	echo "Summary saved to: $$SUMMARY"; \
 	true
+
+.PHONY: questa-clean
+questa-clean:
+	rm -rf $(SIM_RESULTS)/questa_*
 
 .PHONY: gen-certify-vsim
 gen-certify-vsim: gen questa-compile certify-vsim
