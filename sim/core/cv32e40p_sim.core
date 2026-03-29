@@ -1,0 +1,187 @@
+CAPI=2:
+# FuseSoC core descriptor for CV32E40P simulation (Verilator)
+# Targets:
+#   sim          - rv32imc  (FPU_EN=0)
+#   sim_fpu      - rv32imcf (FPU_EN=1)
+#   sim_waves    - rv32imc  with FST tracing
+#   sim_fpu_waves - rv32imcf with FST tracing
+#
+# Fileset order is significant: Verilator requires packages to be defined before
+# the modules that use them. rtl_top (cv32e40p_top + bhv) always comes last so
+# that FPU packages (fpnew_pkg etc.) from rtl_fpu precede it in the sim_fpu targets.
+name: openhwgroup:cv32e40p-dv:cv32e40p_sim:0.1
+description: CV32E40P core testbench for Verilator simulation
+
+filesets:
+  rtl_base:
+    files:
+      # include dirs
+      - ../../core-v-cores/cv32e40p/rtl/include: {is_include_file: true, include_path: ../../core-v-cores/cv32e40p/rtl/include}
+      - ../../core-v-cores/cv32e40p/bhv: {is_include_file: true, include_path: ../../core-v-cores/cv32e40p/bhv}
+      - ../../core-v-cores/cv32e40p/bhv/include: {is_include_file: true, include_path: ../../core-v-cores/cv32e40p/bhv/include}
+      - ../../core-v-cores/cv32e40p/sva: {is_include_file: true, include_path: ../../core-v-cores/cv32e40p/sva}
+      # package files
+      - ../../core-v-cores/cv32e40p/rtl/include/cv32e40p_apu_core_pkg.sv
+      - ../../core-v-cores/cv32e40p/rtl/include/cv32e40p_fpu_pkg.sv
+      - ../../core-v-cores/cv32e40p/rtl/include/cv32e40p_pkg.sv
+      # RTL source files
+      - ../../core-v-cores/cv32e40p/rtl/cv32e40p_if_stage.sv
+      - ../../core-v-cores/cv32e40p/rtl/cv32e40p_cs_registers.sv
+      - ../../core-v-cores/cv32e40p/rtl/cv32e40p_register_file_ff.sv
+      - ../../core-v-cores/cv32e40p/rtl/cv32e40p_load_store_unit.sv
+      - ../../core-v-cores/cv32e40p/rtl/cv32e40p_id_stage.sv
+      - ../../core-v-cores/cv32e40p/rtl/cv32e40p_aligner.sv
+      - ../../core-v-cores/cv32e40p/rtl/cv32e40p_decoder.sv
+      - ../../core-v-cores/cv32e40p/rtl/cv32e40p_compressed_decoder.sv
+      - ../../core-v-cores/cv32e40p/rtl/cv32e40p_fifo.sv
+      - ../../core-v-cores/cv32e40p/rtl/cv32e40p_prefetch_buffer.sv
+      - ../../core-v-cores/cv32e40p/rtl/cv32e40p_hwloop_regs.sv
+      - ../../core-v-cores/cv32e40p/rtl/cv32e40p_mult.sv
+      - ../../core-v-cores/cv32e40p/rtl/cv32e40p_int_controller.sv
+      - ../../core-v-cores/cv32e40p/rtl/cv32e40p_ex_stage.sv
+      - ../../core-v-cores/cv32e40p/rtl/cv32e40p_alu_div.sv
+      - ../../core-v-cores/cv32e40p/rtl/cv32e40p_alu.sv
+      - ../../core-v-cores/cv32e40p/rtl/cv32e40p_ff_one.sv
+      - ../../core-v-cores/cv32e40p/rtl/cv32e40p_popcnt.sv
+      - ../../core-v-cores/cv32e40p/rtl/cv32e40p_apu_disp.sv
+      - ../../core-v-cores/cv32e40p/rtl/cv32e40p_controller.sv
+      - ../../core-v-cores/cv32e40p/rtl/cv32e40p_obi_interface.sv
+      - ../../core-v-cores/cv32e40p/rtl/cv32e40p_prefetch_controller.sv
+      - ../../core-v-cores/cv32e40p/rtl/cv32e40p_sleep_unit.sv
+      - ../../core-v-cores/cv32e40p/rtl/cv32e40p_core.sv
+    file_type: systemVerilogSource
+
+  rtl_fpu:
+    files:
+      - ../../core-v-cores/cv32e40p/rtl/vendor/pulp_platform_common_cells/include: {is_include_file: true, include_path: ../../core-v-cores/cv32e40p/rtl/vendor/pulp_platform_common_cells/include}
+      - ../../core-v-cores/cv32e40p/rtl/vendor/pulp_platform_common_cells/src/cf_math_pkg.sv
+      - ../../core-v-cores/cv32e40p/rtl/vendor/pulp_platform_common_cells/src/rr_arb_tree.sv
+      - ../../core-v-cores/cv32e40p/rtl/vendor/pulp_platform_common_cells/src/lzc.sv
+      - ../../core-v-cores/cv32e40p/rtl/vendor/pulp_platform_fpnew/src/fpnew_pkg.sv
+      - ../../core-v-cores/cv32e40p/rtl/vendor/pulp_platform_fpnew/vendor/opene906/E906_RTL_FACTORY/gen_rtl/clk/rtl/gated_clk_cell.v: {file_type: verilogSource}
+      - ../../core-v-cores/cv32e40p/rtl/vendor/pulp_platform_fpnew/vendor/opene906/E906_RTL_FACTORY/gen_rtl/fdsu/rtl/pa_fdsu_ctrl.v: {file_type: verilogSource}
+      - ../../core-v-cores/cv32e40p/rtl/vendor/pulp_platform_fpnew/vendor/opene906/E906_RTL_FACTORY/gen_rtl/fdsu/rtl/pa_fdsu_ff1.v: {file_type: verilogSource}
+      - ../../core-v-cores/cv32e40p/rtl/vendor/pulp_platform_fpnew/vendor/opene906/E906_RTL_FACTORY/gen_rtl/fdsu/rtl/pa_fdsu_pack_single.v: {file_type: verilogSource}
+      - ../../core-v-cores/cv32e40p/rtl/vendor/pulp_platform_fpnew/vendor/opene906/E906_RTL_FACTORY/gen_rtl/fdsu/rtl/pa_fdsu_prepare.v: {file_type: verilogSource}
+      - ../../core-v-cores/cv32e40p/rtl/vendor/pulp_platform_fpnew/vendor/opene906/E906_RTL_FACTORY/gen_rtl/fdsu/rtl/pa_fdsu_round_single.v: {file_type: verilogSource}
+      - ../../core-v-cores/cv32e40p/rtl/vendor/pulp_platform_fpnew/vendor/opene906/E906_RTL_FACTORY/gen_rtl/fdsu/rtl/pa_fdsu_special.v: {file_type: verilogSource}
+      - ../../core-v-cores/cv32e40p/rtl/vendor/pulp_platform_fpnew/vendor/opene906/E906_RTL_FACTORY/gen_rtl/fdsu/rtl/pa_fdsu_srt_single.v: {file_type: verilogSource}
+      - ../../core-v-cores/cv32e40p/rtl/vendor/pulp_platform_fpnew/vendor/opene906/E906_RTL_FACTORY/gen_rtl/fdsu/rtl/pa_fdsu_top.v: {file_type: verilogSource}
+      - ../../core-v-cores/cv32e40p/rtl/vendor/pulp_platform_fpnew/vendor/opene906/E906_RTL_FACTORY/gen_rtl/fpu/rtl/pa_fpu_dp.v: {file_type: verilogSource}
+      - ../../core-v-cores/cv32e40p/rtl/vendor/pulp_platform_fpnew/vendor/opene906/E906_RTL_FACTORY/gen_rtl/fpu/rtl/pa_fpu_frbus.v: {file_type: verilogSource}
+      - ../../core-v-cores/cv32e40p/rtl/vendor/pulp_platform_fpnew/vendor/opene906/E906_RTL_FACTORY/gen_rtl/fpu/rtl/pa_fpu_src_type.v: {file_type: verilogSource}
+      - ../../core-v-cores/cv32e40p/rtl/vendor/pulp_platform_fpnew/src/fpnew_divsqrt_th_32.sv
+      - ../../core-v-cores/cv32e40p/rtl/vendor/pulp_platform_fpnew/src/fpnew_classifier.sv
+      - ../../core-v-cores/cv32e40p/rtl/vendor/pulp_platform_fpnew/src/fpnew_rounding.sv
+      - ../../core-v-cores/cv32e40p/rtl/vendor/pulp_platform_fpnew/src/fpnew_cast_multi.sv
+      - ../../core-v-cores/cv32e40p/rtl/vendor/pulp_platform_fpnew/src/fpnew_fma_multi.sv
+      - ../../core-v-cores/cv32e40p/rtl/vendor/pulp_platform_fpnew/src/fpnew_noncomp.sv
+      - ../../core-v-cores/cv32e40p/rtl/vendor/pulp_platform_fpnew/src/fpnew_opgroup_fmt_slice.sv
+      - ../../core-v-cores/cv32e40p/rtl/vendor/pulp_platform_fpnew/src/fpnew_opgroup_multifmt_slice.sv
+      - ../../core-v-cores/cv32e40p/rtl/vendor/pulp_platform_fpnew/src/fpnew_opgroup_block.sv
+      - ../../core-v-cores/cv32e40p/rtl/vendor/pulp_platform_fpnew/src/fpnew_top.sv
+      - ../../core-v-cores/cv32e40p/rtl/cv32e40p_fp_wrapper.sv
+    file_type: systemVerilogSource
+
+  rtl_top:
+    files:
+      - ../../core-v-cores/cv32e40p/rtl/cv32e40p_top.sv
+      - ../../core-v-cores/cv32e40p/bhv/cv32e40p_sim_clock_gate.sv
+      - ../../core-v-cores/cv32e40p/bhv/include/cv32e40p_tracer_pkg.sv
+      - ../../core-v-cores/cv32e40p/bhv/cv32e40p_tb_wrapper.sv
+    file_type: systemVerilogSource
+
+  tb_core:
+    files:
+      - ../../tb/core/tb_riscv/include/perturbation_defines.sv
+      - ../../tb/core/tb_top.sv
+      - ../../tb/core/mm_ram.sv
+      - ../../tb/core/dp_ram.sv
+      - ../../tb/core/tb_riscv/riscv_rvalid_stall.sv
+      - ../../tb/core/tb_riscv/riscv_gnt_stall.sv
+    file_type: systemVerilogSource
+
+  waiver:
+    files:
+      - verilator_waiver.vlt: {file_type: vlt}
+
+targets:
+  sim:
+    description: Verilator simulation — rv32imc (FPU_EN=0)
+    default_tool: verilator
+    filesets:
+      - rtl_base
+      - rtl_top
+      - tb_core
+      - waiver
+    toplevel: tb_top
+    tools:
+      verilator:
+        mode: binary
+        verilator_options:
+          - "--sv"
+          - "-GFPU_EN=0"
+          - "-Wno-lint"
+        make_options:
+          - "-j4"
+
+  sim_fpu:
+    description: Verilator simulation — rv32imcf (FPU_EN=1)
+    default_tool: verilator
+    filesets:
+      - rtl_base
+      - rtl_fpu
+      - rtl_top
+      - tb_core
+      - waiver
+    toplevel: tb_top
+    tools:
+      verilator:
+        mode: binary
+        verilator_options:
+          - "--sv"
+          - "-GFPU_EN=1"
+          - "-Wno-lint"
+        make_options:
+          - "-j4"
+
+  sim_waves:
+    description: Verilator simulation — rv32imc with FST waveform tracing
+    default_tool: verilator
+    filesets:
+      - rtl_base
+      - rtl_top
+      - tb_core
+      - waiver
+    toplevel: tb_top
+    tools:
+      verilator:
+        mode: binary
+        verilator_options:
+          - "--sv"
+          - "-GFPU_EN=0"
+          - "--trace-fst"
+          - "-Wno-lint"
+        make_options:
+          - "-j4"
+
+  sim_fpu_waves:
+    description: Verilator simulation — rv32imcf with FST waveform tracing
+    default_tool: verilator
+    filesets:
+      - rtl_base
+      - rtl_fpu
+      - rtl_top
+      - tb_core
+      - waiver
+    toplevel: tb_top
+    tools:
+      verilator:
+        mode: binary
+        verilator_options:
+          - "--sv"
+          - "-GFPU_EN=1"
+          - "--trace-fst"
+          - "-Wno-lint"
+        make_options:
+          - "-j4"
