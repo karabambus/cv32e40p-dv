@@ -105,13 +105,22 @@ include $(CV32E40P_DV)/mk/Common.mk
 # verilator configuration
 VERILATOR           = verilator
 VERI_FLAGS         +=
-VERI_WAIVERS       += -Wno-COMBDLY -Wno-MULTIDRIVEN -Wno-BLKANDNBLK -Wno-lint --Wno-UNOPTFLAT -Wno-MODDUP -Wno-WIDTHCONCAT -Wno-WIDTHEXPAND -Wno-WIDTHTRUNC
-VERI_COMPILE_FLAGS += $(VERI_WAIVERS) $(SV_CMP_FLAGS)
 VERI_TRACE         ?=
 VERI_OBJ_DIR       ?= cobj_dir
 #VERI_LOG_DIR       ?= cobj_dir/logs
 VERI_LOG_DIR       ?= $(SIM_TEST_PROGRAM_RESULTS)
-VERI_CFLAGS        += -O2
+
+# FuseSoC configuration
+FUSESOC             = fusesoc
+FUSESOC_CORE        = openhwgroup:cv32e40p-dv:cv32e40p_sim:0.1
+FUSESOC_TARGET      = $(if $(filter rv32imcf,$(CV_CORE_CONFIG)),sim_fpu,sim)
+FUSESOC_WAVES_SUFFIX = $(if $(filter 1,$(WAVES)),_waves,)
+FUSESOC_FINAL_TARGET = $(FUSESOC_TARGET)$(FUSESOC_WAVES_SUFFIX)
+# Each target gets its own build root to prevent FPU_EN=0/1 collisions
+# (Verilator incremental build would silently reuse the wrong binary otherwise)
+FUSESOC_BUILD_DIR   = $(CV32E40P_DV)/build/$(FUSESOC_FINAL_TARGET)
+# FuseSoC output path: <build_root>/<vlnv>/<target>-verilator/Vtb_top
+VERI_EXEC_FUSESOC   = $(FUSESOC_BUILD_DIR)/openhwgroup_cv32e40p-dv_cv32e40p_sim_0.1/$(FUSESOC_FINAL_TARGET)-verilator/Vtb_top
 
 # TB source files for the CV32E40P core
 #TBSRC_HOME  := $(CORE_V_VERIF)/$(CV_CORE_LC)/tb
@@ -196,22 +205,17 @@ ifneq (${WAVES}, 0)
   VERI_WAVE_CMD   = +wave_file=$(SIM_RUN_RESULTS)/$(WAVE_FILE)
 endif
 
-verilate: CV_CORE_pkg $(TBSRC_VERI) $(TBSRC_PKG)
+verilate: CV_CORE_pkg
 	@echo "$(BANNER)"
-	@echo "* Compiling CORE TB and CV32E40P with Verilator"
+	@echo "* Compiling CORE TB and CV32E40P with Verilator via FuseSoC (target=$(FUSESOC_FINAL_TARGET))"
 	@echo "$(BANNER)"
-	$(VERILATOR) --binary --cc --sv --exe \
-		$(VERI_TRACE) \
-	        --top-module tb_top \
-		$(TBSRC_VERI) \
-		-f $(CV_CORE_MANIFEST) \
-		--Mdir $(VERI_OBJ_DIR) \
-		-CFLAGS "-std=gnu++14 $(VERI_CFLAGS)" \
-		$(VERI_COMPILE_FLAGS) \
-		-GFPU_EN=$(CERT_FPU_EN)
+	$(FUSESOC) --cores-root=$(CV32E40P_DV)/sim/core \
+	           run --no-export --target=$(FUSESOC_FINAL_TARGET) \
+	           --build-root=$(FUSESOC_BUILD_DIR) \
+	           --setup --build $(FUSESOC_CORE)
 	mkdir -p $(SIM_RESULTS)
 	mkdir -p $(SIM_TEST_RESULTS)
-	mv $(VERI_OBJ_DIR)/Vtb_top $(SIM_TEST_RESULTS)/verilator_executable
+	cp $(VERI_EXEC_FUSESOC) $(SIM_TEST_RESULTS)/verilator_executable
 
 test: verilate $(TEST_PROGRAM_PATH)/$(TEST)/$(TEST).hex
 	@echo "$(BANNER)"
@@ -229,6 +233,7 @@ test: verilate $(TEST_PROGRAM_PATH)/$(TEST)/$(TEST).hex
 verilator-clean:
 	if [ -d $(SIM_RESULTS) ]; then rm -r $(SIM_RESULTS); fi
 	if [ -d $(VERI_OBJ_DIR) ]; then rm -r $(VERI_OBJ_DIR); fi
+	if [ -d $(FUSESOC_BUILD_DIR) ]; then rm -r $(FUSESOC_BUILD_DIR); fi
 	if [ -e memory_dump.bin ]; then rm memory_dump.bin; fi
 	if [ -e cv32e40p_tb.vcd ]; then rm cv32e40p_tb.vcd; fi
 
@@ -413,7 +418,7 @@ questa-compile: CV_CORE_pkg
 	mkdir -p $(VSIM_WORK_DIR)
 	$(VLOG) $(VLOG_FLAGS) -f $(CV_CORE_MANIFEST)
 	$(VLOG) $(VLOG_FLAGS) $(TBSRC_PKG)
-	$(VLOG) $(VLOG_FLAGS) $(TBSRC_VERI)
+	$(VLOG) $(VLOG_FLAGS) $(TBSRC)
 	$(VOPT) $(VOPT_FLAGS) \
 		-G FPU_EN=$(CERT_FPU_EN) \
 		tb_top
