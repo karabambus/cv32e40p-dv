@@ -286,38 +286,25 @@ else
 endif
 
 ###############################################################################
-# Certification profile: scopes which extension testplans ACT4 processes.
-# ACT4's select_tests() further filters by the core's implemented_extensions.
-# Without CERT_PROFILE, ACT4 runs the full config (no EXTENSIONS= filter).
-# Supported profiles: rvi20
-CERT_PROFILE ?=
-
-ifeq ($(CERT_PROFILE),rvi20)
-  # RVI20U32 profile — mandatory: I; optional: A,C,D,F,M,Zca,Zcd,Zcf,Zicntr,Zicsr,Zifencei,Zihpm
-  _CERT_EXTS = I,M,A,C,D,F,Zca,Zcd,Zcf,Zicntr,Zicsr,Zifencei,Zihpm
-else ifneq ($(CERT_PROFILE),)
-  $(error Unknown CERT_PROFILE=$(CERT_PROFILE). Supported: rvi20)
-endif
-
-###############################################################################
 # certification test-program directories
 certification_PROGRAM_PATH    = $(ACT4_PKG)/work/$(CERT_CONFIG_NAME)/elfs
 certification_PROGRAM_RELPATH = ../../vendor_lib/riscv-arch-test/act4/work/$(CERT_CONFIG_NAME)/elfs
-CERT_RESULTS_DIR = certification_$(CV_CORE_CONFIG)$(if $(CERT_PROFILE),_$(CERT_PROFILE))
 
 ###############################################################################
 # certification test target (run ALL ELFs under compliance/rv32, quiet + summary)
 .PHONY: gen
 gen: $(ACT4_PKG)
 	@command -v uv >/dev/null 2>&1 || { echo "Error: 'uv' not found. Install from https://docs.astral.sh/uv/getting-started/installation/"; exit 1; }
+	@echo "* Cleaning ACT4.0 directory..."
 	@$(MAKE) -C $(ACT4_PKG) clean
-	@echo "* Running ACT4.0 gen$(if $(CERT_PROFILE), with profile '$(CERT_PROFILE)' extensions: $(_CERT_EXTS))"
+	@echo "* Generating ACT4.0 tests..."
 	@$(MAKE) -C $(ACT4_PKG) \
+		EXTENSIONS=I,M,C,Zca,Zicsr,Zifencei \
 		CONFIG_FILES=config/cores/cv32e40p/$(CERT_CONFIG_NAME)/test_config.yaml
 	@echo "* Tests generated in: $(certification_PROGRAM_PATH)"
 
 .PHONY: certify
-certify: TEST = $(CERT_RESULTS_DIR)
+certify: TEST = certification_$(CV_CORE_CONFIG)
 certify: verilate
 	@echo "$(BANNER)"
 	@echo "* Running ALL compliance ELFs with Verilator"
