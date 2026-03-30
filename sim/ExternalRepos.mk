@@ -12,7 +12,12 @@ export SHELL = /bin/bash
 
 CV_CORE_REPO   ?= https://github.com/openhwgroup/cv32e40p
 CV_CORE_BRANCH ?= master
-CV_CORE_HASH   ?= 360d272898d81806be3377193870dbf83a3ea79f
+CV_CORE_HASH   ?= 360d272898d81806be3377193870dbf83a3ea79f    # tag: cv32e40p_v1.8.3
+
+# CV32E40P v1.0.0 (RTL Freeze 2020-12-10)
+CV_CORE_V100_REPO   ?= https://github.com/openhwgroup/cv32e40p
+CV_CORE_V100_BRANCH ?= master
+CV_CORE_V100_HASH   ?= 120ac3ee79ef56a57fe07dd8701cd4ee94458fd5  # tag: cv32e40p_v1.0.0
 
 CV_VERIF_REPO   ?= https://github.com/openhwgroup/core-v-verif
 CV_VERIF_BRANCH ?= cv32e20-dv/dev
