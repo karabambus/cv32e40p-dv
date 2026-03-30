@@ -142,10 +142,14 @@ SIM_LIBS    := $(CORE_V_VERIF)/lib/sim_libs
 
 # RTL source files for the CV32E40P core
 # DESIGN_RTL_DIR is used by CV_CORE_MANIFEST file
-CV_CORE_PKG           := $(CV32E40P_DV)/core-v-cores/$(CV_CORE_LC)
-ifeq ($(CV_CORE_CONFIG),rv32imcf)
+ifeq ($(CV_CORE_CONFIG),v1.0.0_rv32imc)
+  CV_CORE_PKG         := $(CV32E40P_DV)/core-v-cores/cv32e40p_v1.0.0
+  CV_CORE_MANIFEST    := $(CV_CORE_PKG)/cv32e40p_manifest.flist
+else ifeq ($(CV_CORE_CONFIG),rv32imcf)
+  CV_CORE_PKG         := $(CV32E40P_DV)/core-v-cores/$(CV_CORE_LC)
   CV_CORE_MANIFEST    := $(CV_CORE_PKG)/cv32e40p_fpu_manifest.flist
 else
+  CV_CORE_PKG         := $(CV32E40P_DV)/core-v-cores/$(CV_CORE_LC)
   CV_CORE_MANIFEST    := $(CV_CORE_PKG)/cv32e40p_manifest.flist
 endif
 export DESIGN_RTL_DIR  = $(CV_CORE_PKG)/rtl
@@ -165,7 +169,11 @@ check:
 	@echo "CLONE_CV_CORE_CMD = $(CLONE_CV_CORE_CMD)"
 
 # Shorthand rules for convience
+ifeq ($(CV_CORE_CONFIG),v1.0.0_rv32imc)
+CV_CORE_pkg: clone_rtl_v1.0.0
+else
 CV_CORE_pkg: clone_rtl
+endif
 
 tbsrc_pkg: $(TBSRC_PKG)
 
@@ -208,6 +216,7 @@ verilate: CV_CORE_pkg $(TBSRC_VERI) $(TBSRC_PKG)
 		--Mdir $(VERI_OBJ_DIR) \
 		-CFLAGS "-std=gnu++14 $(VERI_CFLAGS)" \
 		$(VERI_COMPILE_FLAGS) \
+		$(CERT_V100_FLAG) \
 		-GFPU_EN=$(CERT_FPU_EN)
 	mkdir -p $(SIM_RESULTS)
 	mkdir -p $(SIM_TEST_RESULTS)
@@ -240,7 +249,16 @@ clone_rtl:
 	@echo "$(BANNER)"
 	@echo "* Cloning CV32E40P RTL model"
 	@echo "$(BANNER)"
-	$(CLONE_CV_CORE_CMD)
+	if [ ! -d $(CV_CORE_PKG) ]; then $(CLONE_CV_CORE_CMD); fi
+
+clone_rtl_v1.0.0:
+	@echo "$(BANNER)"
+	@echo "* Cloning CV32E40P v1.0.0 RTL model"
+	@echo "$(BANNER)"
+	if [ ! -d $(CV32E40P_DV)/core-v-cores/cv32e40p_v1.0.0 ]; then \
+		git clone -b cv32e40p_v1.0.0 --single-branch $(CV_CORE_V100_REPO) \
+		$(CV32E40P_DV)/core-v-cores/cv32e40p_v1.0.0; \
+	fi
 
 ###############################################################################
 # clean up simulation results
@@ -263,7 +281,7 @@ clean-dist:
 	rm -rf riscv-fesvr riscv-isa-sim
 
 clean-cloned:
-	rm -rf $(CV_CORE_PKG) $(CORE_V_VERIF)
+	rm -rf $(CV_CORE_PKG) $(CORE_V_VERIF) $(CV32E40P_DV)/core-v-cores/cv32e40p_v1.0.0
 
 clean-all-banner:
 	@echo "$(BANNER)"
@@ -274,17 +292,24 @@ clean_all: clean-all-banner clean-all-targets
 #endend
 
 ###############################################################################
-# ISA configuration: rv32imc (FPU=0) or rv32imcf (FPU=1)
+# ISA configuration: rv32imc (FPU=0), rv32imcf (FPU=1), or v1.0.0_rv32imc
 CV_CORE_CONFIG ?= rv32imc
 
 ifeq ($(CV_CORE_CONFIG),rv32imcf)
   CERT_FPU_EN      = 1
   CERT_CONFIG_NAME = cv32e40p_v1.8.3_rv32imcf
   CERT_EXTENSIONS  = I,M,C,F,Zca,Zcf,Zicsr,Zifencei,Zicntr
+  CERT_V100_FLAG   =
+else ifeq ($(CV_CORE_CONFIG),v1.0.0_rv32imc)
+  CERT_FPU_EN      = 0
+  CERT_CONFIG_NAME = cv32e40p_v1.0.0_rv32imc
+  CERT_EXTENSIONS  = I,M,C,Zca,Zicsr,Zifencei,Zicntr
+  CERT_V100_FLAG   = +define+CV32E40P_V100
 else
   CERT_FPU_EN      = 0
   CERT_CONFIG_NAME = cv32e40p_v1.8.3_rv32imc
   CERT_EXTENSIONS  = I,M,C,Zca,Zicsr,Zifencei,Zicntr
+  CERT_V100_FLAG   =
 endif
 
 ###############################################################################
