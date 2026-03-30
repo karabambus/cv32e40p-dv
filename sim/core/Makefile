@@ -280,9 +280,11 @@ CV_CORE_CONFIG ?= rv32imc
 ifeq ($(CV_CORE_CONFIG),rv32imcf)
   CERT_FPU_EN      = 1
   CERT_CONFIG_NAME = cv32e40p_v1.8.3_rv32imcf
+  CERT_EXTENSIONS  = I,M,C,F,Zca,Zcf,Zicsr,Zifencei,Zicntr
 else
   CERT_FPU_EN      = 0
   CERT_CONFIG_NAME = cv32e40p_v1.8.3_rv32imc
+  CERT_EXTENSIONS  = I,M,C,Zca,Zicsr,Zifencei,Zicntr
 endif
 
 ###############################################################################
@@ -299,7 +301,7 @@ gen: $(ACT4_PKG)
 	@$(MAKE) -C $(ACT4_PKG) clean
 	@echo "* Generating ACT4.0 tests..."
 	@$(MAKE) -C $(ACT4_PKG) \
-		EXTENSIONS=I,M,C,Zca,Zicsr,Zifencei \
+		EXTENSIONS=$(CERT_EXTENSIONS) \
 		CONFIG_FILES=config/cores/cv32e40p/$(CERT_CONFIG_NAME)/test_config.yaml
 	@echo "* Tests generated in: $(certification_PROGRAM_PATH)"
 
@@ -371,9 +373,9 @@ gen-certify: gen certify
 #   make gen-certify-vsim [CV_CORE_CONFIG=rv32imcf] # gen + compile + run
 #   make questa-clean   [CV_CORE_CONFIG=rv32imcf]   # wipe work library
 
-VSIM        ?= /home/marin/altera/25.1std/questa_fse/linux_x86_64/vsim
-VLOG        ?= /home/marin/altera/25.1std/questa_fse/linux_x86_64/vlog
-VOPT        ?= /home/marin/altera/25.1std/questa_fse/linux_x86_64/vopt
+VSIM        ?= vsim
+VLOG        ?= vlog
+VOPT        ?= vopt
 
 VSIM_WORK_DIR    = $(SIM_RESULTS)/questa_$(CV_CORE_CONFIG)
 VSIM_LOG_DIR     = $(VSIM_WORK_DIR)/logs
