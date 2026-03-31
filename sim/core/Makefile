@@ -56,11 +56,10 @@ CV_CORE       ?= cv32e40p
 CV_CORE_LC     = $(shell echo $(CV_CORE) | tr A-Z a-z)
 CV_CORE_UC     = $(shell echo $(CV_CORE) | tr a-z A-Z)
 
-#TODO(Ateeb): Temporary, remove next 4 lines after debug
 CV_SW_TOOLCHAIN      ?= /opt/riscv
-CV_SW_PREFIX         ?= "riscv64-unknown-elf-"
-CV_SW_MARCH			 ?= rv32imc_zicsr_zifencei
-CV_SW_CC		 	 ?= gcc
+CV_SW_PREFIX         ?= riscv64-unknown-elf-
+CV_SW_MARCH          ?= rv32imc_zicsr_zifencei
+CV_SW_CC             ?= gcc
 
 SIMULATOR     ?= $(CV_SIMULATOR)
 ifneq (${SIMULATOR}, verilator)
@@ -109,35 +108,26 @@ VERI_WAIVERS       += -Wno-COMBDLY -Wno-MULTIDRIVEN -Wno-BLKANDNBLK -Wno-lint --
 VERI_COMPILE_FLAGS += $(VERI_WAIVERS) $(SV_CMP_FLAGS)
 VERI_TRACE         ?=
 VERI_OBJ_DIR       ?= cobj_dir
-#VERI_LOG_DIR       ?= cobj_dir/logs
 VERI_LOG_DIR       ?= $(SIM_TEST_PROGRAM_RESULTS)
 VERI_CFLAGS        += -O2
 
 # TB source files for the CV32E40P core
-#TBSRC_HOME  := $(CORE_V_VERIF)/$(CV_CORE_LC)/tb
 TBSRC_HOME  := $(CV32E40P_DV)/tb
 TBSRC_TOP   := $(TBSRC_HOME)/core/tb_top.sv
 TBSRC_CORE  := $(TBSRC_HOME)/core
 TBSRC_PKG   := $(TBSRC_CORE)/tb_riscv/include/perturbation_defines.sv
-TBSRC       := $(TBSRC_CORE)/tb_top.sv \
-               $(TBSRC_CORE)/mm_ram.sv \
-               $(TBSRC_CORE)/dp_ram.sv \
-               $(TBSRC_CORE)/tb_riscv/riscv_random_stall.sv \
-               $(TBSRC_CORE)/tb_riscv/riscv_random_interrupt_generator.sv \
-               $(TBSRC_CORE)/tb_riscv/riscv_rvalid_stall.sv \
-               $(TBSRC_CORE)/tb_riscv/riscv_gnt_stall.sv
 
-#/tb_riscv/riscv_rvalid_stall.sv
-
-RTLSRC_VLOG_TB_TOP	:= $(basename $(notdir $(TBSRC_TOP)))
-RTLSRC_VOPT_TB_TOP	:= $(addsuffix _vopt, $(RTLSRC_VLOG_TB_TOP))
-
-#TBSRC_VERI  := $(TBSRC_CORE)/tb_top_verilator.sv
+# Verilator TB sources (no UVM/random-stall modules — guarded by `ifndef VERILATOR)
 TBSRC_VERI  := $(TBSRC_CORE)/tb_top.sv \
                $(TBSRC_CORE)/tb_riscv/riscv_rvalid_stall.sv \
                $(TBSRC_CORE)/tb_riscv/riscv_gnt_stall.sv \
                $(TBSRC_CORE)/mm_ram.sv \
                $(TBSRC_CORE)/dp_ram.sv
+
+# Full TB sources (includes UVM random-stall and interrupt generators for Questa)
+TBSRC       := $(TBSRC_VERI) \
+               $(TBSRC_CORE)/tb_riscv/riscv_random_stall.sv \
+               $(TBSRC_CORE)/tb_riscv/riscv_random_interrupt_generator.sv
 SIM_LIBS    := $(CORE_V_VERIF)/lib/sim_libs
 
 # RTL source files for the CV32E40P core
@@ -289,7 +279,6 @@ clean-all-banner:
 	@echo "$(BANNER)"
 
 clean_all: clean-all-banner clean-all-targets
-#endend
 
 ###############################################################################
 # ISA configuration: rv32imc (FPU=0), rv32imcf (FPU=1), or v1.0.0_rv32imc
@@ -358,9 +347,9 @@ certify: verilate
 	  LOG="$(VERI_LOG_DIR)/$${REL%.*}.log"; \
 	  mkdir -p "$$(dirname "$$LOG")"; \
 	  if [ ! -f "$$HEX" ] || [ "$$ELF" -nt "$$HEX" ]; then \
-	    riscv64-unknown-elf-objcopy -O verilog "$$ELF" "$$HEX"; \
+	    $(CV_SW_PREFIX)objcopy -O verilog "$$ELF" "$$HEX"; \
 	  fi; \
-	  ENTRY=$$(riscv64-unknown-elf-readelf -h "$$ELF" | awk '/Entry point/{print $$NF}'); \
+	  ENTRY=$$($(CV_SW_PREFIX)readelf -h "$$ELF" | awk '/Entry point/{print $$NF}'); \
 	  set +e; \
 	  "$(SIM_TEST_RESULTS)/verilator_executable" \
 	    $(VERI_RUN_FLAGS) \
@@ -406,11 +395,9 @@ VSIM_WORK_DIR    = $(SIM_RESULTS)/questa_$(CV_CORE_CONFIG)
 VSIM_LOG_DIR     = $(VSIM_WORK_DIR)/logs
 VSIM_OPT_TOP     = tb_top_opt
 
-# NOTE: with a full Questa license, remove +define+VERILATOR below and add a
-# separate vlog step for tb_riscv/riscv_random_interrupt_generator.sv (after
-# TBSRC_PKG, before TBSRC_VERI) — mm_ram.sv instantiates it under `ifndef VERILATOR.
-# With Questa FSE (Altera Starter), keep +define+VERILATOR: FSE lacks the
-# svverification license required for randcase/UVM stall features in mm_ram.sv.
+# Questa FSE workaround: +define+VERILATOR skips UVM/randcase blocks in mm_ram.sv
+# that require the svverification license (not available in FSE/Altera Starter).
+# For full Questa, use the main branch (no +define+VERILATOR, compiles TBSRC).
 VLOG_FLAGS  = -sv -work $(VSIM_WORK_DIR) \
               +define+FPU_EN=$(CERT_FPU_EN) \
               +define+VERILATOR \
@@ -469,9 +456,9 @@ certify-vsim:
 	  LOG="$(VSIM_LOG_DIR)/$${REL%.*}.log"; \
 	  mkdir -p "$$(dirname "$$LOG")"; \
 	  if [ ! -f "$$HEX" ] || [ "$$ELF" -nt "$$HEX" ]; then \
-	    riscv64-unknown-elf-objcopy -O verilog "$$ELF" "$$HEX"; \
+	    $(CV_SW_PREFIX)objcopy -O verilog "$$ELF" "$$HEX"; \
 	  fi; \
-	  ENTRY=$$(riscv64-unknown-elf-readelf -h "$$ELF" | awk '/Entry point/{print $$NF}'); \
+	  ENTRY=$$($(CV_SW_PREFIX)readelf -h "$$ELF" | awk '/Entry point/{print $$NF}'); \
 	  ENTRY_HEX=$${ENTRY#0x}; \
 	  set +e; \
 	  $(VSIM) $(VSIM_FLAGS) \
