@@ -181,7 +181,7 @@ module tb_top
         if (wave_file != "") begin
 	    $display("[%s] @ t=%0t: waves written to %s", id, $time, wave_file);
 	end
-	$display("\n[%s] @ t=%0t: Verilator simulation ending...", id, $time);
+	$display("\n[%s] @ t=%0t: simulation ending...", id, $time);
     end
 
     // Core instantiation — cv32e40p_tb_wrapper (v1.8.3) or cv32e40p_wrapper (v1.0.0)
