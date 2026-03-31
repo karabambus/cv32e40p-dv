@@ -1,5 +1,6 @@
 ###############################################################################
 #
+# Copyright 2026 Eclipse Foundation
 # Copyright 2020 OpenHW Group
 #
 # Licensed under the Solderpad Hardware Licence, Version 2.0 (the "License");
@@ -17,37 +18,37 @@
 ###############################################################################
 #
 # VSIM-specific Makefile for the Core-V-Verif "uvmt" testbench.
-# VSIM is the Mentor Graphics Questa SystemVerilog simulator.
+# VSIM is the Siemens EDA Questa SystemVerilog simulator.
 #
 ###############################################################################
 
 # Executables
-VLIB   					= vlib
-VMAP 					= vmap
-VLOG 					= $(CV_SIM_PREFIX) vlog
-VOPT 					= $(CV_SIM_PREFIX) vopt
-VSIM 					= $(CV_SIM_PREFIX) vsim
-VISUALIZER				= $(CV_TOOL_PREFIX) visualizer
+VLIB                    = vlib
+VMAP                    = vmap
+VLOG                    = $(CV_SIM_PREFIX) vlog
+VOPT                    = $(CV_SIM_PREFIX) vopt
+VSIM                    = $(CV_SIM_PREFIX) vsim
+VISUALIZER              = $(CV_TOOL_PREFIX) visualizer
 VCOVER                  = vcover
 
 # Paths
-VWORK     				= work
+QUESTASIM_HOME         ?= $(abspath $(shell which $(VLIB))/../../)
+VWORK                   = work
 VSIM_COV_MERGE_DIR      = $(SIM_CFG_RESULTS)/$(CFG)/merged
-UVM_HOME               ?= $(abspath $(shell which $(VLIB))/../../verilog_src/uvm-1.2/src)
-export QUESTASIM_HOME  ?= $(abspath $(shell which $(VLIB))/../../)
+UVM_HOME                = $(QUESTASIM_HOME)/verilog_src/uvm-1.2/src
 USES_DPI = 1
 
 # Special var to point to tool and installation dependent path of DPI headers.
 # Used to recompile dpi_dasm_spike if needed (by default, not needed).
-DPI_INCLUDE            ?= $(abspath $(shell which $(VLIB))/../../include)
+DPI_INCLUDE            ?= $(QUESTASIM_HOME)/include
 
 # Default flags
-VSIM_USER_FLAGS         ?=
-VOPT_COV  				?= +cover=setf+$(RTLSRC_VLOG_TB_TOP).
-VSIM_COV 				?= -coverage
-VOPT_WAVES_ADV_DEBUG    ?= -designfile design.bin
-VSIM_WAVES_ADV_DEBUG    ?= -qwavedb=+signal+assertion+ignoretxntime+msgmode=both
-VSIM_WAVES_DO           ?= $(VSIM_SCRIPT_DIR)/waves.tcl
+VSIM_USER_FLAGS        ?=
+VOPT_COV               ?= +cover=setf+$(RTLSRC_VLOG_TB_TOP).
+VSIM_COV               ?= -coverage
+VOPT_WAVES_ADV_DEBUG   ?= -designfile design.bin
+VSIM_WAVES_ADV_DEBUG   ?= -qwavedb=+signal+assertion+ignoretxntime+msgmode=both
+VSIM_WAVES_DO          ?= $(VSIM_SCRIPT_DIR)/waves.tcl
 
 # Common QUIET flag defaults to -quiet unless VERBOSE is set
 ifeq ($(call IS_YES,$(VERBOSE)),YES)
@@ -58,7 +59,7 @@ endif
 
 ifeq ($(USES_DPI),1)
   DPILIB_VLOG_OPT =
-  DPILIB_VSIM_OPT = -sv_lib $(UVM_HOME)/../../../uvm-1.2/linux_x86_64/uvm_dpi
+  DPILIB_VSIM_OPT = -sv_lib $(QUESTASIM_HOME)/uvm-1.2/linux_x86_64/uvm_dpi
   DPILIB_TARGET = dpi_lib$(BITS)
 else
   DPILIB_VLOG_OPT = +define+UVM_NO_DPI
@@ -160,7 +161,7 @@ VOPT_FLAGS    ?= \
                  $(QUIET)
 
 ###############################################################################
-# VSIM (Simulaion)
+# VSIM (Simulation)
 
 VSIM_FLAGS        += $(VSIM_USER_FLAGS)
 VSIM_FLAGS        += $(USER_RUN_FLAGS)
@@ -172,17 +173,17 @@ VSIM_FLAGS        += -suppress 8522
 VSIM_FLAGS        += -suppress 8550
 VSIM_FLAGS        += -suppress 8549
 VSIM_FLAGS        += -permit_unmatched_virtual_intf
-VSIM_DEBUG_FLAGS  ?= -debugdb
-VSIM_GUI_FLAGS    ?= -gui -debugdb
+VSIM_DEBUG_FLAGS ?= -debugdb
+VSIM_GUI_FLAGS   ?= -gui
 VSIM_SCRIPT_DIR	   = $(abspath $(MAKE_PATH)/../tools/vsim)
 
 VSIM_UVM_ARGS      = +incdir+$(UVM_HOME)/src $(UVM_HOME)/src/uvm_pkg.sv
 
-VSIM_FLAGS += -sv_lib $(basename $(OVP_MODEL_DPI))
 ifeq ($(call IS_YES,$(USE_ISS)),YES)
-VSIM_FLAGS += +USE_ISS
+    VSIM_FLAGS += -sv_lib $(basename $(OVP_MODEL_DPI))
+	VSIM_FLAGS += +USE_ISS
 else
-VSIM_FLAGS += +DISABLE_OVPSIM
+	VSIM_FLAGS += +DISABLE_OVPSIM
 endif
 ifeq ($(call IS_YES,$(TEST_DISABLE_ALL_CSR_CHECKS)),YES)
 VSIM_FLAGS +="+DISABLE_ALL_CSR_CHECKS"
@@ -224,16 +225,15 @@ endif
 ################################################################################
 # Interactive simulation
 ifeq ($(call IS_YES,$(GUI)),YES)
-ifeq ($(call IS_YES,$(ADV_DEBUG)),YES)
-VSIM_FLAGS += -visualizer=+designfile=../design.bin
+	ifeq ($(call IS_YES,$(ADV_DEBUG)),YES)
+		VSIM_FLAGS += -visualizer=+designfile=../design.bin
+	else
+		VSIM_FLAGS += $(VSIM_GUI_FLAGS) $(VSIM_DEBUG_FLAGS)
+	endif
 else
-VSIM_FLAGS += -gui
+	VSIM_FLAGS += -batch
 endif
-VSIM_FLAGS += -do $(VSIM_SCRIPT_DIR)/gui.tcl
-else
-VSIM_FLAGS += -batch
 VSIM_FLAGS += -do $(VSIM_SCRIPT_DIR)/vsim.tcl
-endif
 
 ################################################################################
 # Coverage command
@@ -386,8 +386,6 @@ gen_corev-dv: $(LIBS)
 			$(VSIM_FLAGS) \
 			$(CV_CORE_LC)_instr_gen_tb_top_vopt \
 			$(DPILIB_VSIM_OPT) \
-			+UVM_TESTNAME=$(GEN_UVM_TEST) \
-			+num_of_tests=$(GEN_NUM_TESTS)  \
 			-l $(TEST)_$(GEN_START_INDEX)_$(GEN_NUM_TESTS).log \
 			+start_idx=$(GEN_START_INDEX) \
 			+num_of_tests=$(GEN_NUM_TESTS) \
@@ -476,7 +474,7 @@ gen_ovpsim_ic:
 export IMPERAS_TOOLS=$(SIM_RUN_RESULTS)/ovpsim.ic
 
 # Target to create work directory in $(VSIM_RESULTS)/
-lib: mk_vsim_dir $(CV_CORE_PKG) $(SVLIB_PKG) $(TBSRC_PKG) $(TBSRC)
+lib: mk_vsim_dir $(CV_CORE_PKG) $(CV_VERIF_PKG) rvvi_stub $(SVLIB_PKG) $(TBSRC_PKG) $(TBSRC)
 	if [ ! -d "$(SIM_CFG_RESULTS)/$(VWORK)" ]; then \
 		$(VLIB) $(SIM_CFG_RESULTS)/$(VWORK); \
 	fi
@@ -495,6 +493,7 @@ vlog: $(LIBS) lib
 			$(CFG_COMPILE_FLAGS) \
 			+incdir+$(DV_UVME_PATH) \
 			+incdir+$(DV_UVMT_PATH) \
+			+incdir+$(DPI_DASM_PKG) \
 			+incdir+$(UVM_HOME) \
 			$(UVM_HOME)/uvm_pkg.sv \
 			-f $(CV_CORE_MANIFEST) \
@@ -515,7 +514,7 @@ opt: vlog
 			$(RTLSRC_VLOG_TB_TOP) \
 			-o $(RTLSRC_VOPT_TB_TOP)
 
-comp: opt
+comp: clone_cv_core_rtl $(SVLIB_PKG) $(CV_VERIF_PKG) rvvi_stub opt
 
 RUN_DIR = $(abspath $(SIM_RUN_RESULTS))
 
@@ -534,7 +533,7 @@ run: $(VSIM_RUN_PREREQ) gen_ovpsim_ic
 			$(VSIM_FLAGS) \
 			-l vsim-$(VSIM_TEST).log \
 			$(DPILIB_VSIM_OPT) \
-			+UVM_TESTNAME=$(TEST_UVM_TEST) \
+			+UVM_TESTNAME=$(UVM_TEST_NAME) \
 			$(RTLSRC_VOPT_TB_TOP) \
 			$(CFG_PLUSARGS) \
 			$(TEST_PLUSARGS)
@@ -581,5 +580,6 @@ clean:
 	rm -rf $(SIM_RESULTS)
 
 # All generated files plus the clone of the RTL
-clean_all: clean clean_riscv-dv clean_test_programs clean_bsp clean_compliance clean_embench clean_dpi_dasm_spike clean_svlib
+# TODO: fix the 'clean_embench' targets
+clean_all: clean clean_rtl clean_riscv-dv clean_test_programs clean_bsp clean_compliance clean_dpi_dasm_spike clean_svlib clean_rvvi_stub clean_core_v_verif
 	rm -rf $(CV_CORE_PKG)

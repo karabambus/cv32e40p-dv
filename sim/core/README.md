@@ -43,12 +43,13 @@ fetched on demand via a Make target — it is **not** a git submodule.
 
 ### ISA Configuration
 
-CV32E40P supports two certification configurations controlled by `CV_CORE_CONFIG`:
+CV32E40P supports three certification configurations controlled by `CV_CORE_CONFIG`:
 
-| `CV_CORE_CONFIG` | Extensions | FPU | Config name |
-|---|---|---|---|
-| `rv32imc` (default) | I, M, C, Zca, Zicsr, Zifencei | off | `cv32e40p_v1.8.3_rv32imc` |
-| `rv32imcf` | I, M, C, Zca, Zcf, F, Zicsr, Zifencei | on | `cv32e40p_v1.8.3_rv32imcf` |
+| `CV_CORE_CONFIG` | RTL | Extensions | FPU | Config name |
+|---|---|---|---|---|
+| `rv32imc` (default) | v1.8.3 | I, M, C, Zca, Zicsr, Zifencei, Zicntr | off | `cv32e40p_v1.8.3_rv32imc` |
+| `rv32imcf` | v1.8.3 | I, M, C, F, Zca, Zcf, Zicsr, Zifencei, Zicntr | on | `cv32e40p_v1.8.3_rv32imcf` |
+| `v1.0.0_rv32imc` | v1.0.0 | I, M, C, Zca, Zicsr, Zifencei, Zicntr | off | `cv32e40p_v1.0.0_rv32imc` |
 
 ### Prerequisites
 - **RISC-V GCC toolchain** (`riscv64-unknown-elf-gcc`): upstream GCC with RISC-V multi-lib support.

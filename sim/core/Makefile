@@ -190,7 +190,7 @@ ifneq (${WAVE}, 0)
 endif
 ifneq (${WAVES}, 0)
   VERI_TRACE      = --trace-fst
-  VERI_RUN_FLAGS  = +waves
+  VERI_RUN_FLAGS += +waves
   VERI_WAVE_CMD   = +wave_file=$(SIM_RUN_RESULTS)/$(WAVE_FILE)
 endif
 
@@ -198,9 +198,9 @@ verilate: CV_CORE_pkg $(TBSRC_VERI) $(TBSRC_PKG)
 	@echo "$(BANNER)"
 	@echo "* Compiling CORE TB and CV32E40P with Verilator"
 	@echo "$(BANNER)"
-	$(VERILATOR) --binary --cc --sv --exe \
+	$(VERILATOR) --main --binary --cc --sv --exe --build \
 		$(VERI_TRACE) \
-	        --top-module tb_top \
+		--top-module tb_top \
 		$(TBSRC_VERI) \
 		-f $(CV_CORE_MANIFEST) \
 		--Mdir $(VERI_OBJ_DIR) \
