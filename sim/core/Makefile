@@ -406,14 +406,8 @@ VSIM_WORK_DIR    = $(SIM_RESULTS)/questa_$(CV_CORE_CONFIG)
 VSIM_LOG_DIR     = $(VSIM_WORK_DIR)/logs
 VSIM_OPT_TOP     = tb_top_opt
 
-# NOTE: with a full Questa license, remove +define+VERILATOR below and add a
-# separate vlog step for tb_riscv/riscv_random_interrupt_generator.sv (after
-# TBSRC_PKG, before TBSRC_VERI) — mm_ram.sv instantiates it under `ifndef VERILATOR.
-# With Questa FSE (Altera Starter), keep +define+VERILATOR: FSE lacks the
-# svverification license required for randcase/UVM stall features in mm_ram.sv.
 VLOG_FLAGS  = -sv -work $(VSIM_WORK_DIR) \
               +define+FPU_EN=$(CERT_FPU_EN) \
-              +define+VERILATOR \
               -suppress 2583
 VOPT_FLAGS  = -work $(VSIM_WORK_DIR) \
               +acc -o $(VSIM_OPT_TOP)
